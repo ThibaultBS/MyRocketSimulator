@@ -9,7 +9,7 @@ Created on Sun Jan 15 17:01:25 2023
 """
 
 Short-term wishlist:
-    - .
+    - Add list of events
 
 Mid-term wishlist:
     - Implement Rocket
