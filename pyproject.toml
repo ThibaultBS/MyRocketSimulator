@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "myrocketsimulator"
+version = "0.0.1"
+license = {file = "LICENSE.txt"}
+authors = [
+  { name="Thibault Bautze-Scherff", email="thibault@bautze-scherff.de" },
+]
+description = "The MyRocketSimulator tool allows to simulate complex rocket missions."
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "matplotlib",
+    "skyfield>=1.45"
+]
+
+
+[tool.setuptools]
+include-package-data = true
