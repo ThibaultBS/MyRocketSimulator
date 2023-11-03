@@ -1,0 +1,147 @@
+%General Mission Analysis Tool(GMAT) Script
+%Created: 2023-09-24 14:41:35
+
+
+%----------------------------------------
+%---------- Solar System User-Modified Values
+%----------------------------------------
+
+GMAT SolarSystem.EphemerisSource = 'DE421';
+GMAT SolarSystem.SPKFilename = '../data/planetary_ephem/spk/DE421AllPlanets.bsp';
+
+%----------------------------------------
+%---------- Spacecraft
+%----------------------------------------
+
+Create Spacecraft CREME;
+GMAT CREME.DateFormat = TDBModJulian;
+GMAT CREME.Epoch = '29945.50080073974';
+GMAT CREME.CoordinateSystem = EarthMJ2000Eq;
+GMAT CREME.DisplayStateType = Cartesian;
+GMAT CREME.X = 4160.654753643215;
+GMAT CREME.Y = -5602.074997808763;
+GMAT CREME.Z = 12.06646228442704;
+GMAT CREME.VX = -0.8311739944172626;
+GMAT CREME.VY = -0.6011835366131142;
+GMAT CREME.VZ = 7.48792556529475;
+GMAT CREME.DryMass = 4;
+GMAT CREME.Cd = 2.2;
+GMAT CREME.Cr = 1.5;
+GMAT CREME.DragArea = 0.033;
+GMAT CREME.SRPArea = 0.033;
+GMAT CREME.SPADDragScaleFactor = 1;
+GMAT CREME.SPADSRPScaleFactor = 1;
+GMAT CREME.NAIFId = -10022001;
+GMAT CREME.NAIFIdReferenceFrame = -9022001;
+GMAT CREME.OrbitColor = Red;
+GMAT CREME.TargetColor = Teal;
+GMAT CREME.OrbitErrorCovariance = [ 1e+70 0 0 0 0 0 ; 0 1e+70 0 0 0 0 ; 0 0 1e+70 0 0 0 ; 0 0 0 1e+70 0 0 ; 0 0 0 0 1e+70 0 ; 0 0 0 0 0 1e+70 ];
+GMAT CREME.CdSigma = 1e+70;
+GMAT CREME.CrSigma = 1e+70;
+GMAT CREME.Id = 'SatId';
+GMAT CREME.Attitude = CoordinateSystemFixed;
+GMAT CREME.SPADSRPInterpolationMethod = Bilinear;
+GMAT CREME.SPADSRPScaleFactorSigma = 1e+70;
+GMAT CREME.SPADDragInterpolationMethod = Bilinear;
+GMAT CREME.SPADDragScaleFactorSigma = 1e+70;
+GMAT CREME.ModelFile = 'aura.3ds';
+GMAT CREME.ModelOffsetX = 0;
+GMAT CREME.ModelOffsetY = 0;
+GMAT CREME.ModelOffsetZ = 0;
+GMAT CREME.ModelRotationX = 0;
+GMAT CREME.ModelRotationY = 0;
+GMAT CREME.ModelRotationZ = 0;
+GMAT CREME.ModelScale = 1;
+GMAT CREME.AttitudeDisplayStateType = 'Quaternion';
+GMAT CREME.AttitudeRateDisplayStateType = 'AngularVelocity';
+GMAT CREME.AttitudeCoordinateSystem = EarthMJ2000Eq;
+GMAT CREME.EulerAngleSequence = '321';
+
+
+
+
+%----------------------------------------
+%---------- ForceModels
+%----------------------------------------
+
+Create ForceModel DefaultProp_ForceModel;
+GMAT DefaultProp_ForceModel.CentralBody = Earth;
+GMAT DefaultProp_ForceModel.PrimaryBodies = {Earth};
+GMAT DefaultProp_ForceModel.PointMasses = {Luna, Sun};
+GMAT DefaultProp_ForceModel.SRP = On;
+GMAT DefaultProp_ForceModel.RelativisticCorrection = Off;
+GMAT DefaultProp_ForceModel.ErrorControl = RSSStep;
+GMAT DefaultProp_ForceModel.GravityField.Earth.Degree = 35;
+GMAT DefaultProp_ForceModel.GravityField.Earth.Order = 35;
+GMAT DefaultProp_ForceModel.GravityField.Earth.StmLimit = 100;
+GMAT DefaultProp_ForceModel.GravityField.Earth.PotentialFile = 'EGM96.cof';
+GMAT DefaultProp_ForceModel.GravityField.Earth.TideModel = 'None';
+GMAT DefaultProp_ForceModel.SRP.Flux = 1367;
+GMAT DefaultProp_ForceModel.SRP.SRPModel = Spherical;
+GMAT DefaultProp_ForceModel.SRP.Nominal_Sun = 149597870.691;
+GMAT DefaultProp_ForceModel.Drag.AtmosphereModel = MSISE90;
+GMAT DefaultProp_ForceModel.Drag.HistoricWeatherSource = 'ConstantFluxAndGeoMag';
+GMAT DefaultProp_ForceModel.Drag.PredictedWeatherSource = 'ConstantFluxAndGeoMag';
+GMAT DefaultProp_ForceModel.Drag.CSSISpaceWeatherFile = 'SpaceWeather-All-v1.2.txt';
+GMAT DefaultProp_ForceModel.Drag.SchattenFile = 'SchattenPredict.txt';
+GMAT DefaultProp_ForceModel.Drag.F107 = 150;
+GMAT DefaultProp_ForceModel.Drag.F107A = 150;
+GMAT DefaultProp_ForceModel.Drag.MagneticIndex = 3;
+GMAT DefaultProp_ForceModel.Drag.SchattenErrorModel = 'Nominal';
+GMAT DefaultProp_ForceModel.Drag.SchattenTimingModel = 'NominalCycle';
+GMAT DefaultProp_ForceModel.Drag.DragModel = 'Spherical';
+
+%----------------------------------------
+%---------- Propagators
+%----------------------------------------
+
+Create Propagator DefaultProp;
+GMAT DefaultProp.FM = DefaultProp_ForceModel;
+GMAT DefaultProp.Type = PrinceDormand853;
+GMAT DefaultProp.InitialStepSize = 10;
+GMAT DefaultProp.Accuracy = 1e-09;
+GMAT DefaultProp.MinStep = 0.001;
+GMAT DefaultProp.MaxStep = 10;
+GMAT DefaultProp.MaxStepAttempts = 50;
+GMAT DefaultProp.StopIfAccuracyIsViolated = true;
+
+%----------------------------------------
+%---------- Subscribers
+%----------------------------------------
+
+
+Create ReportFile ReportFile1;
+GMAT ReportFile1.SolverIterations = Current;
+GMAT ReportFile1.UpperLeft = [ 0.04166666666666666 0.08888888888888889 ];
+GMAT ReportFile1.Size = [ 0.2777777777777778 0.2777777777777778 ];
+GMAT ReportFile1.RelativeZOrder = 907;
+GMAT ReportFile1.Maximized = false;
+GMAT ReportFile1.Filename = '/Users/thibault/Documents/Space/Python/MRSPackage/MRS_examples/referenceCSVs/GMAT_example2_10hours.csv';
+%GMAT ReportFile1.Filename = '/Users/thibault/Documents/Space/Python/MRSPaper1/GMAT_Reports/GMAT_config8_3600s.csv';
+GMAT ReportFile1.Precision = 16;
+GMAT ReportFile1.Add = {CREME.TDBModJulian, CREME.EarthMJ2000Eq.X, CREME.EarthMJ2000Eq.Y, CREME.EarthMJ2000Eq.Z, CREME.EarthMJ2000Eq.VX, CREME.EarthMJ2000Eq.VY, CREME.EarthMJ2000Eq.VZ, CREME.ElapsedSecs, CREME.Earth.SMA, CREME.Earth.ECC, CREME.EarthMJ2000Eq.INC, CREME.EarthMJ2000Eq.AOP, CREME.EarthMJ2000Eq.RAAN, CREME.Earth.TA, CREME.DefaultProp_ForceModel.AtmosDensity};
+GMAT ReportFile1.WriteHeaders = true;
+GMAT ReportFile1.LeftJustify = On;
+GMAT ReportFile1.ZeroFill = Off;
+GMAT ReportFile1.FixedWidth = true;
+GMAT ReportFile1.Delimiter = ' ';
+GMAT ReportFile1.ColumnWidth = 23;
+GMAT ReportFile1.WriteReport = true;
+
+
+%----------------------------------------
+%---------- Mission Sequence
+%----------------------------------------
+
+BeginMissionSequence;
+Propagate DefaultProp(CREME) {CREME.ElapsedSecs = 36000};
+
+
+
+
+
+
+
+
+
+

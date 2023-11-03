@@ -58,7 +58,7 @@ class SpaceCraft():
                  
         return SCthrust, SCmass, returnVals
     
-    def get_DragF(self, MET, vrel=0.0, rho=0.0, mach=0.0):
+    def get_DragF(self, MET, vrel=0.0, rho=0.0, mach1=0.0):
         # returns drag force in [N], as a direction vector
         
         # initialize cummulated values
@@ -67,7 +67,7 @@ class SpaceCraft():
         #for SCelement in self.SCelementsList:
         for i, SCelement in enumerate(self.SCelementsList):
              # drag
-             SCdragF += SCelement.get_DragF(MET, vrel, rho, mach) * SCelement.SCED.amount
+             SCdragF += SCelement.get_DragF(MET, vrel, rho, mach1) * SCelement.SCED.amount
          
         return SCdragF
 
@@ -497,10 +497,10 @@ class SpaceCraftElement():
        
         return thrust, mass, throttle, flowrate, fuelPart, self.SCED.amount
     
-    def get_DragF(self, MET, vrel=np.zeros((3)), rho=0.0, mach=0.0):
+    def get_DragF(self, MET, vrel=np.zeros((3)), rho=0.0, mach1=0.0):
         
         # calc drag force for given velocity, density and mach number
-        DragF = - 0.5 * vrel * np.linalg.norm(vrel) * self.get_Cd(MET, mach)\
+        DragF = - 0.5 * vrel * np.linalg.norm(vrel) * self.get_Cd(MET, vrel/mach1)\
                 * self.get_DragArea(MET) * rho
         
         return DragF

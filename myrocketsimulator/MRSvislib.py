@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from importlib_resources import files
+import simplekml
 
 PKGNAME = 'myrocketsimulator'
 
@@ -125,7 +126,7 @@ class MRSviewer():
             ax.plot(lonvalues[pointer:i],latvalues[pointer:i],'r', linewidth=1)
             pointer = i+1
             
-        return None
+        return fig
             
             
     def plot_GroundtrackMoon(self, METrange=[0]):
@@ -180,7 +181,7 @@ class MRSviewer():
             ax.plot(lonvalues[pointer:i],latvalues[pointer:i],'r', linewidth=1)
             pointer = i+1
         
-        return None
+        return fig
         
     def plot_EarthOE(self, METrange=[0]):
         """
@@ -201,9 +202,22 @@ class MRSviewer():
         DFpointer = self.get_DFpointer(METrange)
         
         figtitle = self.MD.name + ' Orbital Elements'
-        fig, ax = plt.subplots(2,3)
+        fig, ax = plt.subplots(2,3, figsize=(9, 6))
         fig.suptitle(figtitle, fontsize=16)
-        #fig.set_size_inches(10, 5)
+       
+        
+        plt.subplots_adjust(left=0.1,
+                            bottom=0.11, 
+                            right=0.945, 
+                            top=0.89, 
+                            wspace=0.44, 
+                            hspace=0.374)
+        
+        # adjust font sizes
+        plt.rcParams.update({'font.size': 12})
+        plt.rcParams.update({'axes.labelsize': 12})
+        plt.rcParams.update({'axes.titlesize': 12})
+
         
         # SMA
         ax[0,0].set_title('Semi-major axis')
@@ -260,7 +274,7 @@ class MRSviewer():
                 self.missionDF.EarthOEtrueAnomaly[DFpointer[0]:DFpointer[1]],
                 linewidth=1.5)
         
-        return None
+        return fig
         
     def plot_MoonOE(self, METrange=[0]):
         """
@@ -281,9 +295,21 @@ class MRSviewer():
         DFpointer = self.get_DFpointer(METrange)
         
         figtitle = self.MD.name + ' Orbital Elements (Moon)'
-        fig, ax = plt.subplots(2,3)
+        fig, ax = plt.subplots(2,3, figsize=(9, 6))
         fig.suptitle(figtitle, fontsize=16)
-        #fig.set_size_inches(10, 5)
+       
+        
+        plt.subplots_adjust(left=0.1,
+                            bottom=0.11, 
+                            right=0.945, 
+                            top=0.89, 
+                            wspace=0.44, 
+                            hspace=0.374)
+        
+        # adjust font sizes
+        plt.rcParams.update({'font.size': 12})
+        plt.rcParams.update({'axes.labelsize': 12})
+        plt.rcParams.update({'axes.titlesize': 12})
         
         # SMA
         ax[0,0].set_title('Semi-major axis')
@@ -340,7 +366,7 @@ class MRSviewer():
                 self.missionDF.MoonOEtrueAnomaly[DFpointer[0]:DFpointer[1]],
                 linewidth=1.5)
         
-        return None
+        return fig
         
     def plot_ComparisonPosDiff(self, METrange=[0]):
         """
@@ -372,7 +398,7 @@ class MRSviewer():
                 self.missionDF.compPosDiff[DFpointer[0]:DFpointer[1]],
                 linewidth=2)
         
-        return None
+        return fig
         
     def plot_ComparisonStateVecDiff(self, METrange=[0]):
         """
@@ -452,7 +478,7 @@ class MRSviewer():
                 self.missionDF.vz[DFpointer[0]:DFpointer[1]]-self.missionDF.compVz[DFpointer[0]:DFpointer[1]],
                 linewidth=1.5)
         
-        return None
+        return fig
         
         
     def plot_MoonRPS(self, METrange=[0]):
@@ -493,7 +519,7 @@ class MRSviewer():
         ax.legend()
         ax.view_init(elev=35., azim=-35)
         
-        return None
+        return fig
         
     def plot_GCRF_XYpos(self, METrange=[0], withMoon=0):
         """
@@ -537,7 +563,7 @@ class MRSviewer():
         # add legend
         ax.legend()
         
-        return None
+        return fig
     
     def plot_GCRF_orbit(self, METrange=[0]):
         """
@@ -571,6 +597,11 @@ class MRSviewer():
         ax = fig.add_subplot(111, projection='3d')
         ax.set_title(figtitle)
         
+        # adjust font sizes
+        plt.rcParams.update({'font.size': 12})
+        plt.rcParams.update({'axes.labelsize': 12})
+        plt.rcParams.update({'axes.titlesize': 12})
+        
         # loop through segments
         pointer = DFpointer[0]
         for i in range(len(segjumps)):
@@ -591,6 +622,108 @@ class MRSviewer():
         z = EarthR * np.cos(v)
         ax.plot_surface(x, y, z, color='blue', alpha=0.3)     
         
+        return fig
+        
+        
+    def export_Earth_KML(self, METrange=[0], folder='./'):
+        """
+        Export KML file of trajetory around Earth.
+
+        Parameters
+        ----------
+        METrange : TYPE, optional
+            DESCRIPTION. The default is [0].
+
+        Returns
+        -------
+        None.
+
+        """
+        
+        # get start/end pointer for mission dataframe
+        DFpointer = self.get_DFpointer(METrange)
+        
+        # make path to file
+        filename = folder +' '+ self.MD.name +' Earth_Orbit.kml'
+        
+        # get coords
+        mycoords = self.missionDF.loc[DFpointer[0]:DFpointer[1],
+                                      ['EarthLat', 'EarthLon', 'EarthAlt']].to_numpy()
+
+        # invert lat/lon
+        mycoords.T[[0,1]] = mycoords.T[[1,0]]
+        
+        # make tuple
+        tuplecoords = tuple(map(tuple, mycoords))
+        
+        # Create an instance of Kml
+        kml = simplekml.Kml(open=1)
+        
+        linestring = kml.newlinestring(name=self.MD.name)
+        
+        for i in range(len(tuplecoords)):
+            linestring.coords.addcoordinates([tuplecoords[i]])
+        
+        linestring.altitudemode = simplekml.AltitudeMode.absolute
+        linestring.style.linestyle.color = 'ff0000ff'
+        linestring.style.linestyle.width = 2
+        
+        # Save the KML
+        kml.save(filename)
+        
         return None
+        
+
+    def export_Moon_KML(self, METrange=[0], folder='./'):
+        """
+        Export KML file of trajetory around Moon.
+
+        Parameters
+        ----------
+        METrange : TYPE, optional
+            DESCRIPTION. The default is [0].
+
+        Returns
+        -------
+        None.
+
+        """
+        
+        # get start/end pointer for mission dataframe
+        DFpointer = self.get_DFpointer(METrange)
+        
+        # make path to file
+        filename = folder +' '+ self.MD.name +' Moon_Orbit.kml'
+        
+        # get coords
+        mycoords = self.missionDF.loc[DFpointer[0]:DFpointer[1],
+                                      ['MoonLat', 'MoonLon', 'MoonAlt']].to_numpy()
+
+        # invert lat/lon
+        mycoords.T[[0,1]] = mycoords.T[[1,0]]
+        
+        # adjust altitude
+        mycoords[:,2] -= 1737.4e3 
+        
+        # make tuple
+        tuplecoords = tuple(map(tuple, mycoords))
+        
+        # Create an instance of Kml
+        kml = simplekml.Kml(open=1)
+        
+        linestring = kml.newlinestring(name=self.MD.name)
+        
+        for i in range(len(tuplecoords)):
+            linestring.coords.addcoordinates([tuplecoords[i]])
+        
+        linestring.altitudemode = simplekml.AltitudeMode.absolute
+        linestring.style.linestyle.color = 'ff0000ff'
+        linestring.style.linestyle.width = 2
+        
+        # Save the KML
+        kml.save(filename)
+        
+        return None
+        
         
         

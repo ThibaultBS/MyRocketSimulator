@@ -1,4 +1,5 @@
 # .gitignore from https://github.com/github/gitignore/blob/main/Python.gitignore 
+# Additional exceptions added for MRS specific files
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -163,3 +164,9 @@ cython_debug/
 
 # Mac stuff
 .DS_Store
+
+# Skyfield data
+*.bsp
+*.tf
+*.tpc
+*.bpc

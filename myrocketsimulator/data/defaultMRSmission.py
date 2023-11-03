@@ -16,6 +16,7 @@ class MRSmissionData():
    
     # For launchtype 1, is ignored and set to 0; for launchtype 0, t0 might be offseted to MET=0.
     t0_MET = 0. # indicates the MET for given t0 time and y0 state vector
+    tend_MET = 0 # MET preliminary end of simulation (!=0 to be used)
  
     # launch settings; mission starts at very first mission segment 
     launchsite_name = 'KSC LC-39a'

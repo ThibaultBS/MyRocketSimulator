@@ -3,7 +3,7 @@
 """
 Created on Sun Jan 15 17:01:25 2023
 
-@author: thibault
+@author: Thibault Bautze-Scherff
 """
 
 """
@@ -24,7 +24,7 @@ Long-term wishlist:
     - Drag/lift in function of AoA
     - Export simulation report as PDF (settings, plots, event-table, ...)
     - Multi-Step launch optimizer
-    - External weather for launchsite 
+    - External weather for launchsite
 
 
 """
@@ -87,12 +87,12 @@ MoonFramePA = pc.build_frame_named('MOON_PA_DE421')
 
 class defaultSpacecraft():
     """
-    Class for the default spacecraft, used for static propagation. 
+    Class for the default spacecraft, used for static propagation.
     Static values are required for drag acceleration
     """
-    
+
     name = 'MRS default spacecraft'
-    
+
     class staticValues():
         mass = 500 # [kg]
         dragarea = 1 # [m^2]
@@ -102,12 +102,27 @@ class defaultSpacecraft():
 
 class MRSstaticSpacecraft():
     """
-    Class for static spacecrafts. Used to load provided data or to make a 
+    Class for static spacecrafts. Used to load provided data or to make a
     default spacecraft (when no spacecraft data (SCD) was provided).
-    
+
     """
-    
+
     def __init__(self, SCD=0):
+        """
+        Initializes a static spacecraft.
+
+        Parameters
+        ----------
+        SCD : Spacecraft data Class, optional
+            Class that contains spacecraft data, as provided in mission file.
+            The default is 0, i.e. no class is provided and default values are
+            used.
+
+        Returns
+        -------
+        None.
+
+        """
 
         # if spacecraft data is provided
         if SCD:
@@ -117,10 +132,10 @@ class MRSstaticSpacecraft():
         else:
             self.SCD = defaultSpacecraft()
             self.spacecraftname = 'MRS Default Spacecraft'
-            
+
         # spacecraft mode (active/static)
         self.mode = 'static'
-    
+
     def get_staticvalues(self):
         # returns previously set values
         return self.SCD.staticValues.mass, \
@@ -128,43 +143,43 @@ class MRSstaticSpacecraft():
                self.SCD.staticValues.Cd, \
                self.SCD.staticValues.Cr, \
                self.SCD.staticValues.SRParea
-              
+
     def get_ThrustMassOther(self, MET, pa=0.0, verbose='v'):
         # not implemented for static spacecrafts
         # returns static mass with 0 thrust
         return 0, self.SCD.staticValues.mass, np.zeros((1,6))
 
-    def get_DragF(self, MET, vrel=0.0, rho=0.0, mach=0.0):
+    def get_DragF(self, MET, vrel=0.0, rho=0.0, mach1=0.0):
         # not implemented for static spacecraft
-        # using static values 
+        # using static values
         staticDrag = .5 * self.get_AreaCd() * vrel**2 * rho
         return staticDrag
-    
+
     def get_AreaCd(self, MET=0., mach=0.0):
          return self.SCD.staticValues.dragarea * self.SCD.staticValues.Cd
-    
+
     def set_fixedThrottlePointer(self, MET):
         # not implemented for static spacecrafts
         return None
-    
+
     def reset_fixedThrottlePointer(self):
         # not implemented for static spacecrafts
         return None
-    
+
     def get_EventsList(self):
         # make empty list
         self.eventsDF = pd.DataFrame(index = range(0), columns=['MET','eventType'])
-        return self.eventsDF 
-    
-    
+        return self.eventsDF
+
+
 
 class MRSmission():
     """
-    MRSmission is the main class of the MyRocketSimulator software package. 
-    Based on provided data, it simulate the trajectory of a spaecraft. Later 
-    on, it can add specific data to the trajectory and export the results. 
-    
-    
+    MRSmission is the main class of the MyRocketSimulator software package.
+    Based on provided data, it simulate the trajectory of a spaecraft. Later
+    on, it can add specific data to the trajectory and export the results.
+
+
     Attributes
     ----------
     EarthGravModel : str
@@ -174,7 +189,7 @@ class MRSmission():
     eventCrashed : int
         0 if not crashed, 1 if crashed into Earth
     eventsDF : dataframe
-        State vectors and additional information of relevant events 
+        State vectors and additional information of relevant events
     integrator_atol : float
         Absolute tolerance setting for the integrator (default: 1e-9)
     integrator_max_step : float
@@ -187,8 +202,8 @@ class MRSmission():
         Trajectory simulation result and additional data
     SC : object
         Object that represents the loaded spacecraft
-        
-    
+
+
     Methods
     -------
     check_MD()
@@ -196,7 +211,7 @@ class MRSmission():
     expand_DF(typelist)
         Adds additiona informatin to the mission dataframe after the simulation
     get_EventsList(eventNames)
-        Provides the times and statevectors of defined events 
+        Provides the times and statevectors of defined events
     load_comparisonStateVec(timevec, statevecs)
         Interpolates comparison data and adds it to the missin dataframe
     load_externalMission(timevec, statevecs, name='extMission', atmosModel='')
@@ -209,35 +224,45 @@ class MRSmission():
         Returns state vectors from the simulation
     run_mission()
         Performs the simulation and stores the results in the mission dataframe
-        
-        
-        
+
     """
-    
+
     def __init__(self, missionname='defaultMRSmission', checkmission=True):
         """
-        Initializes the MRS mission object.        
-        
+        Initializes the MRS mission object.
+
         Parameters
         ----------
         missionname : string, optional
-             The name of the mission file to be loaded. 
+             The name of the mission file to be loaded.
              The default is 'defaultMRSmission'.
         checkmission : True/False, optional
-            Wether to check the mission data or not. 
+            Wether to check the mission data or not.
             The default is True if a mission name is provided
 
         """
-      
-        
+
+
         # default settings, can be changed before checking or running the mission
-        self.integrator_atol = 1e-9 # [m]/[m/s]  
-        self.integrator_rtol = 1e-9 
+        self.integrator_atol = 1e-9 # [m]/[m/s]
+        self.integrator_rtol = 1e-9
         self.integrator_max_step = 10. # [s]
         self.EarthGravModel = 'EGM96' # alternative: EGM2008
         self.EarthGravZonalOnly = 0
-        self.DEephemeris = 'DE421'
-        
+        self.DEephemeris = 'DE421' # alternative: DE440
+        self.MoonTides = 0 # experimental
+        self.debugCounter = 0
+        self.OE_TEME = 0 # if 0: OE calculated in ICRF, if 1: OE calc. in TEME
+
+        # space weather settings
+        self.use_spaceweather = 1
+        self.f107s = 150
+        self.f107  = 150
+        self.Ap = 3
+        self.transToMSISE90 = 0
+        self.RhoGain = 1.07         # exemplary value; used in Bautze-Scherff, 2023
+        self.RhoOffset = 3.0495e-14 # exemplary value; used in Bautze-Scherff, 2023
+
         # load mission if one provided
         if missionname != 'defaultMRSmission':
             # load mission
@@ -246,13 +271,13 @@ class MRSmission():
             print('MRS:\t\tUsing default flight. Set up state vector manually \
             or load external state vecs.')
             self.load_mission('defaultMRSmission', checkmission=False)
-        
-        
+
+
         return None
-     
+
     def load_mission(self, missionname, checkmission=True):
         """
-        Loads a mission into the object and checks the validity of the 
+        Loads a mission into the object and checks the validity of the
         mission data.
 
         Parameters
@@ -260,32 +285,32 @@ class MRSmission():
         missionname : string
             Relative path to the missin file (ending with .py)
         checkmission : True/False, optional
-            DESCRIPTION. The default is True.
+             If mission shoudl already be checked. The default is True.
 
         """
-        
-        
+
+
         # save + print missionname
         self.missionname = missionname
         print('MRS:\t\tLoading mission object \''+self.missionname+'\'.')
-        
+
         # mission variables
         self.MDloaded = 0 # 1 if mission data is loaded
         self.MDvalid = 0 # 1 if mission data is valid
-        
-        
+
+
         if missionname != 'defaultMRSmission':
             # load mission data from external file
             try:
-               
-                # This code raises an error when changes were made to the 
+
+                # This code raises an error when changes were made to the
                 # mission data file, but it works (i.e. it's really loading
                 # the specified file, not just reloading it from somewhere else)
                 # Only probelmatic with iPython; solution:
                 # execute %autoreload 0 in iPython
                 # https://stackoverflow.com/questions/63469147/programmatically-check-for-and-disable-ipython-autoreload-extension
                 # https://ipython.readthedocs.io/en/stable/config/extensions/autoreload.html
-                
+
                 # https://stackoverflow.com/questions/67631/how-can-i-import-a-module-dynamically-given-the-full-path
                 pathtoMRSmissiondata = os.getcwd()+'/'+missionname
                 spec = importlib.util.spec_from_file_location('MDmodule', pathtoMRSmissiondata)
@@ -293,28 +318,28 @@ class MRSmission():
                 sys.modules['MDmodule'] = foo
                 spec.loader.exec_module(foo)
                 self.MD = foo.MRSmissionData()
-                
+
                 print('MRS:\t\tLoading MRSmissiondata from file: ')
                 print('MRS:\t\t',pathtoMRSmissiondata)
-                
+
             except ImportError:
                 print('MRS:\t\tERROR: Import of specified mission not possible.')
                 print('MRS:\t\tLeaving load_mission().')
                 return None
-            
+
             except FileNotFoundError:
                 print('MRS:\t\tERROR: File not found:')
                 print('MRS:\t\t',pathtoMRSmissiondata)
                 print('MRS:\t\tLeaving load_mission().')
                 return None
-                
+
         else:
             self.MD = defaultMRSmission.MRSmissionData
-            
-        
+
+
         print('MRS:\t\tMission \''+self.MD.name+'\' loaded.')
         self.MDloaded = 1
-        
+
         # check mission data validity
         if checkmission:
             # MD not valid (because it returns >0 (=number of errors found))
@@ -325,14 +350,14 @@ class MRSmission():
                 print('MRS:\t\tMission data valid.')
         else:
             print('MRS:\t\tAttention: mission data not checked.')
-        
+
         return None
-        
+
     def check_MD(self):
         """
-        Checks mission data agains errors of all kind (missing, wrong, non 
+        Checks mission data agains errors of all kind (missing, wrong, non
         logical, ...) and sets up internal variables.
-        
+
 
         Returns
         -------
@@ -340,27 +365,27 @@ class MRSmission():
             Number of found errors in mission data (self.MD)
 
         """
-  
-        # Do not check if already checked, because this may cause errors in 
+
+        # Do not check if already checked, because this may cause errors in
         # calculated tables.
         if self.MDvalid:
             print('MRS:\t\tMission data validity already checked. Leaving check_MD().')
             return 0
-        
+
         # do not check if MD is not loaded
         if not self.MDloaded:
             print('MRS:\t\tMission data not loaded. Leaving check_MD().')
             return 0
-        
+
         # welcome message
         print('MRS:\t\tChecking mission data validity.')
-        
+
         # counter for errors
-        errorfound = 0 
-        
+        errorfound = 0
+
         # load ephemeris
         self.load_ephemeris()
-        
+
         # add propagation segments after deltaV segments
         for i in range(len(self.MD.missionSegments)):
             # detect deltaV segments
@@ -372,11 +397,11 @@ class MRSmission():
                 propagationSegment.MET = self.MD.missionSegments.MET[i]
                 propagationSegment.comment = 'Continue propagation'
                 # insert new propagation segment
-                self.MD.missionSegments = pd.concat([self.MD.missionSegments.iloc[:i+1], 
-                                             propagationSegment, 
+                self.MD.missionSegments = pd.concat([self.MD.missionSegments.iloc[:i+1],
+                                             propagationSegment,
                                              self.MD.missionSegments.iloc[i+1:]]).reset_index(drop=True)
-                
-        # early end of simulation 
+
+        # early end of simulation
         if self.MD.tend_MET != 0:
             print('MRS:\t\tUsing early ending MET:',self.MD.tend_MET)
             # find mission segments after tend_MET
@@ -388,69 +413,74 @@ class MRSmission():
             self.MD.missionSegments.loc[len(self.MD.missionSegments),\
                                         ['MET', 'type', 'configID', 'comment']] = \
                 self.MD.tend_MET, 0, 0, 'Early simulation end (tend_MET)'
-           
-      
-       
-        # calc t0_JD if not provided for launchtype 0 (start from state vector) 
+
+
+
+        # calc t0_JD if not provided for launchtype 0 (start from state vector)
         # or for launch from pad
         if (self.MD.launchtype==0 and self.MD.t0_JD<=0) or self.MD.launchtype==1:
             # add info to datetime that it's UtC
             self.MD.t0_UTC = self.MD.t0_UTC.replace(tzinfo=utc)
             # updated TDB JD for given UTC time
             self.MD.t0_JD = ts.from_datetime(self.MD.t0_UTC).tdb
-            
-        
+
+
         # make sure t0_MET = 0 for launch from pad
         if self.MD.launchtype==1:
             self.MD.t0_MET = 0
-            
-            
+
+
         # max degree for Earth gravity SH
         lmaxEarth = np.max(self.MD.forcesSettings['EarthSHn'])
         # max degree for Moon gravity SH
         lmaxMoon = np.max(self.MD.forcesSettings['MoonSHn'])
-        # global variables )
-        global clmEarth, clmMoon
-        
+
         # load Earth SH
         if self.EarthGravModel == 'EGM2008':
-            clmEarth = pysh.datasets.Earth.EGM2008(lmax=lmaxEarth) 
+            self.clmEarth = pysh.datasets.Earth.EGM2008(lmax=lmaxEarth)
         elif self.EarthGravModel == 'EGM96':
             # https://importlib-resources.readthedocs.io/en/latest/using.html
             egm96file = files(PKGNAME+'.data').joinpath('egm96_to360.ascii.txt').as_posix()
-            clmEarth = pysh.SHCoeffs.from_file(egm96file, 
-                                               lmax=lmaxEarth, 
+            self.clmEarth = pysh.SHCoeffs.from_file(egm96file,
+                                               lmax=lmaxEarth,
                                                format='shtools')
-            clmEarth.gm = 398600441500000.0
-            clmEarth.r0 = 6.3781363e6
+            self.clmEarth.gm = 398600441500000.0
+            self.clmEarth.r0 = 6.3781363e6
         else:
             print('MRS:\t\tERROR: no valid Earth gravity model selected.')
             errorfound += 1
-            
+
         # lood Moon SH
-        clmMoon = pysh.datasets.Moon.GRGM1200B(lmax=lmaxMoon) 
-        
-        
+        #clmMoon = pysh.datasets.Moon.GRGM1200B(lmax=lmaxMoon)
+        self.clmMoon = pysh.datasets.Moon.GRGM900C(lmax=lmaxMoon)
+        # back up coefficients
+        self.clmMoon.coeffsOrig = self.clmMoon.coeffs * 1.0
+
         # keep only zonal SH for Earth if required
         if self.EarthGravZonalOnly:
-            clmEarth.coeffs[:,:,1:]  = 0
-        
-        
+            self.clmEarth.coeffs[:,:,1:]  = 0
+
+
         # load space weather file if needed
         if 'nrlmsise00' in self.MD.forcesSettings['atmosModel'].to_numpy():
-            # update space weather 
-            sw.update_data() 
-            # load data frame
-            self.swDF = sw.sw_daily()
-        
+            # update space weather if using it
+            if self.use_spaceweather:
+                try:
+                    sw.update_data()
+                except ConnectionError:
+                    print('MRS:\t\tWARNING: no internet connection to update space weather.')
+                    return None
+                # load data frame
+                self.swDF = sw.sw_daily()
+
         # events
         self.eventCrashed = 0
-        
+
         # if launching from pad, calc local ENU for time of lifotff (determined by change of propagation mode)
         if self.MD.launchtype==1:
             # loop through segments
             for i in range(len(self.MD.missionSegments)):
-                # find first occurence of propagationmode = 1 
+                # find first occurence of propagationmode = 1
                 if self.MD.propaSettings.loc[self.MD.missionSegments.configID[i],'mode'] == 1:
                     # calc JD for given MET
                     self.MD.t0_JD_liftoff = self.MD.t0_JD + self.MD.missionSegments.MET[i] * SEC2DAYS
@@ -458,26 +488,23 @@ class MRSmission():
                     lmax_launchsegment = self.MD.forcesSettings.EarthSHn[self.MD.propaSettings.loc[self.MD.missionSegments.configID[i],'forcesID']]
                     # do not continue further to look for propmode 1
                     break
-            
-            # transform launchsite LLA to GCRF at given time of liftoff 
+
+            # transform launchsite LLA to GCRF at given time of liftoff
             self.y0_liftoff = self.transform_LLAgeodetic_GCRF(self.MD.t0_JD_liftoff, self.MD.launchsite_LLA)
             # if Earth-SH are used in lauch segment:
-            if lmax_launchsegment: 
+            if lmax_launchsegment:
                 self.ENU_liftoff = self.get_ENUvec_get_EarthGravity(self.MD.t0_JD_liftoff, self.y0_liftoff, lmax_launchsegment)
             # else, use simpler ENU calculation (based on ellipsoid of Earth, going through Skyfield)
             else:
                 self.ENU_liftoff = self.get_ENUvec_Earth(self.MD.t0_JD_liftoff, self.y0_liftoff)
-                
-
 
         #
         # LOAD SPACECRAFT
         #
-            
-        
+
         # check that spacecraft data is available in mission data
         if hasattr(self.MD, 'spacecraft'):
-            # if it got a SC element list, it's a active spacecraft 
+            # if it got a SC element list, it's a active spacecraft
             if hasattr(self.MD.spacecraft, 'SCelements'):
                 print('MRS:\t\tLoading '+self.MD.spacecraft.name+' as active spacecraft.')
                 self.SC = SpaceCraft(self.MD.spacecraft)
@@ -490,67 +517,65 @@ class MRSmission():
             # make a default spacecraft
             self.SC = MRSstaticSpacecraft()
 
-
-        
-        
         #
         # LOOK FOR ERRORS IN MISSION DATA
         #
-            
-        
+
         # check data related to launch from statevector (launchtype 0)
         if self.MD.launchtype==0:
-                   
+
             # MET offset not within range of mission segments
             if self.MD.t0_MET<self.MD.missionSegments.iloc[0]['MET'] or self.MD.t0_MET>=self.MD.missionSegments.iloc[-1]['MET']:
                 print('MRS:\t\tERROR: t0_MET is outside of mission segments.')
                 errorfound += 1
-    
+
         # check if active spacecraft is available if required in mission data
         # force settings
         if self.MD.forcesSettings.activeSC.to_numpy().sum()>0:
             if not self.SC.mode == 'active':
                 print('MRS:\t\tERROR: MD forcesettigs require active SC.')
                 #errorfound += 1
-                
-        
+
+
         # store mission data is valid
         if not errorfound:
             self.MDvalid = 1
-        
+
         return errorfound
-        
-        
-    def load_ephemeris(self):  
+
+
+    def load_ephemeris(self):
         """
-        
+        Loads the GM values and the DE-files into internal variables.
+        The DE-version is specified in self.DEephemeris.
+
 
         Returns
         -------
         None.
 
         """
-        
+
         if self.DEephemeris == 'DE440':
             planetsEphemeris = load('de440.bsp')
             # gravity constants DE440
             self.SUN_GM   = 132712440041.279419 * 1000**3
-            self.VENUS_GM = 324858.592000 * 1000**3 
-            self.EARTH_GM = 398600.435507 * 1000**3 
-            self.MOON_GM  = 4902.800118 * 1000**3 
-            self.MARS_GM  = 42828.375816 * 1000**3 
-            self.JUPITER_GM = 126712764.100000 * 1000**3 
-        
+            self.VENUS_GM = 324858.592000 * 1000**3
+            self.EARTH_GM = 398600.435507 * 1000**3
+            self.MOON_GM  = 4902.800118 * 1000**3
+            self.MARS_GM  = 42828.375816 * 1000**3
+            self.JUPITER_GM = 126712764.100000 * 1000**3
+
         # default is DE421
         else:
             planetsEphemeris = load('de421.bsp')
             # gravity constants DE421
             self.SUN_GM   = 132712440040.944 * 1000**3
-            self.VENUS_GM = 324858.592000 * 1000**3 
-            self.EARTH_GM = 398600.436233 * 1000**3 
-            self.MOON_GM  = 4902.800076 * 1000**3 
-            self.MARS_GM  = 42828.375214 * 1000**3 
-            self.JUPITER_GM = 126712764.800000 * 1000**3 
+            self.VENUS_GM = 324858.592000 * 1000**3
+            self.EARTH_GM = 398600.436233 * 1000**3
+            self.MOON_GM  = 4902.800076 * 1000**3
+            self.MARS_GM  = 42828.375214 * 1000**3
+            self.JUPITER_GM = 126712764.800000 * 1000**3
 
         self.sun = planetsEphemeris['Sun']
         self.venus = planetsEphemeris['VENUS']
@@ -558,219 +583,230 @@ class MRSmission():
         self.moon = planetsEphemeris['Moon']
         self.mars = planetsEphemeris['MARS_BARYCENTER']
         self.jupiter = planetsEphemeris['JUPITER_BARYCENTER']
-        
+
         return None
-        
+
     def run_mission(self):
         """
-        Executes the mission. Resulting state vectors are saved in the 
+        Executes the mission. Resulting state vectors are saved in the
         mission dataframe (self.missionDF).
 
         Returns
         -------
         None
-            
+
         """
-        
+
         # run only if MD is validated
         if not self.MDvalid:
             print('MRS:\t\tERROR: mission data not validated. Exiting.')
             return None
-        
+
         # start timer
         tic = time.time()
-        
+
         # show some mission parameters
         print('MRS:\t\tRunning mission '+self.MD.name+'.')
-        
+
         # get state vector if starting from it (when launchtype==0)
         if self.MD.launchtype == 0:
             self.statevec = self.MD.y0
             self.JD = self.MD.t0_JD
         # generate empty statevector if starting from lauch pad
-        else:   
+        else:
             self.statevec = np.zeros(6)
             self.JD = 0
-            
+
         # make empty DF to which segment-dataframes will be appended
         self.make_TempDF(int(0))
-        self.missionDF = self.TempDF 
+        self.missionDF = self.TempDF
         del self.TempDF
-            
+
         # make empty DF to append events
         self.make_TempDF(int(0))
-        self.eventsDF = self.TempDF 
+        self.eventsDF = self.TempDF
         del self.TempDF
         # add empty colum (needs to be present because accessed later on)
         self.eventsDF['eventType'] = None
-        
+
         for i in range(self.MD.missionSegments.shape[0]):
-            
+
             # check for crash
             if self.eventCrashed:
                 # end mission
                 break
-            
+
             # don't show message if in last segment (which is not processed)
             if i != len(self.MD.missionSegments)-1:
                 print('MRS:\t\tProcessing mission segment {}.'.format(i))
-                 
+
             ###
             ### PROPAGATE SPACECRAFT
             ###
-       
+
             # if in propgation segment
             if self.MD.missionSegments['type'][i]==0:
-                
+
                 # save current segment and its properties
                 self.segmentType = 0
                 self.segmentID = i
                 self.propaID   = self.MD.missionSegments['configID'][i]
                 self.propaMode = self.MD.propaSettings['mode'][self.propaID]
                 self.forcesID  = self.MD.propaSettings['forcesID'][self.propaID]
-                self.dragOn    = self.MD.forcesSettings['drag'][self.forcesID] 
-                self.SRPOn     = self.MD.forcesSettings['SRP'][self.forcesID] 
+                self.dragOn    = self.MD.forcesSettings['drag'][self.forcesID]
+                self.SRPOn     = self.MD.forcesSettings['SRP'][self.forcesID]
                 self.activeSC  = self.MD.forcesSettings['activeSC'][self.forcesID]
                 self.planets   = self.MD.forcesSettings['planets'][self.forcesID]
                 self.EarthSHn  = self.MD.forcesSettings['EarthSHn'][self.forcesID]
                 self.MoonSHn   = self.MD.forcesSettings['MoonSHn'][self.forcesID]
-                
+
                 ###
                 ### MAKE MET (MISSION ELLAPSED TIME) VECTOR
                 ###
-                
+
                 # if in last segment, just one single MET value
                 if i==len(self.MD.missionSegments)-1:
                     # get MET value
                     self.METvec = np.array([self.MD.missionSegments['MET'][i]])
-                    
+
                 # if not in last segment, generate MET vector
                 else:
-                    # if starting from statevector check t0_MET 
-                    if self.MD.launchtype == 0: 
+                    # if starting from statevector check t0_MET
+                    if self.MD.launchtype == 0:
                         # if reference time of state vector is in next segment
                         if self.MD.t0_MET >= self.MD.missionSegments['MET'][i+1]:
-                            # go to next segment 
+                            # go to next segment
                             continue
                         # if reference time is before current segment start time
                         if self.MD.t0_MET < self.MD.missionSegments['MET'][i]:
                             METsegmentstart = self.MD.missionSegments['MET'][i]
                         # otherwise set starttime to provided t0_MET
-                        else: 
+                        else:
                             METsegmentstart = self.MD.t0_MET
                     # not starting from statevector, use time from segment
                     else:
                         METsegmentstart = self.MD.missionSegments['MET'][i]
-         
+
                     # make timevector (MET) for segment
                     # starttime: starttime of segment
-                    # endtime: starttime of following segment 
+                    # endtime: starttime of following segment
                     # step size: taken from propagation settings for this segment
                     self.METvec = np.arange(
                         METsegmentstart,
                         self.MD.missionSegments['MET'][i+1],
                         self.MD.propaSettings['stepsizePropa'][self.propaID])
-                    # add starttime of next segment as final value of current segment 
+                    # add starttime of next segment as final value of current segment
                     self.METvec = np.append(self.METvec,self.MD.missionSegments['MET'][i+1])
-                    
-          
-                
+
+
+
                 ###
                 ### PREPARE DATA LOGGING
                 ###
-                
+
                 # make vector when to log
-                self.LOGvec = np.zeros(len(self.METvec)) 
+                self.LOGvec = np.zeros(len(self.METvec))
                 self.LOGvec[0::int(self.MD.propaSettings['downsampleLog'][self.propaID])] = 1
-                
-                # make sure not to deactivate the logging of last segment 
+
+                # make sure not to deactivate the logging of last segment
                 # (only one value logged), therefore >1
                 if len(self.LOGvec)>1:
-                    self.LOGvec[-1] = 0 # last one is not logged, will be taken 
+                    self.LOGvec[-1] = 0 # last one is not logged, will be taken
                                         # care of in following segment
-                
+
                 # make temporary dataframe for logging
                 self.make_TempDF(int(np.sum(self.LOGvec)))
-                
+
                 # write segment properties to dataframe
-                self.TempDF['segmentID'] = self.segmentID 
-                self.TempDF['segmentType'] = self.segmentType 
-                self.TempDF['configID'] = self.propaID 
+                self.TempDF['segmentID'] = self.segmentID
+                self.TempDF['segmentType'] = self.segmentType
+                self.TempDF['configID'] = self.propaID
                 self.TempDF['propaMode'] = self.propaMode
-                self.TempDF['forcesID'] = self.forcesID 
-                self.TempDF['activeSC'] = self.activeSC 
-                
+                self.TempDF['forcesID'] = self.forcesID
+                self.TempDF['activeSC'] = self.activeSC
+
                 ###
                 ### LOAD SPACE WEATHER (for date at segment start)
                 ###
-                
+
                 # check space weather is needed
                 if self.MD.forcesSettings['atmosModel'][self.forcesID] == 'nrlmsise00':
-                    
+
                     # JD_TBD at segment starts
                     JD_SegStart = self.MD.t0_JD + \
                         (self.MD.missionSegments['MET'][self.segmentID] - self.MD.t0_MET) * SEC2DAYS
-                    # date string 
+                    # date string
                     datestring = ts.tdb_jd(JD_SegStart).utc_strftime(format='%Y-%m-%d')
-                    
-                    # get indices from spaceweather dataframe
-                    indices = self.swDF.loc[datestring]
-                    # save values
-                    self.f107s = indices['f107_81lst_adj']
-                    self.f107  = indices['f107_adj']
-                    self.Ap    = indices['Apavg'] 
-                    
-                    # save as current atmosModel 
+
+                    # update values if using space weather
+                    if self.use_spaceweather:
+                        # get indices from spaceweather dataframe
+                        indices = self.swDF.loc[datestring]
+                        # save values
+                        self.f107s = indices['f107_81lst_adj']
+                        self.f107  = indices['f107_adj']
+                        self.Ap    = indices['Apavg']
+
+                    # save as current atmosModel
                     self.atmosModel = 'nrlmsise00'
                     self.TempDF['atmosModel'] = self.atmosModel
-                    
+
                 # no atmos model defined
                 else:
                     self.atmosModel = '-'
                     self.TempDF['atmosModel'] = self.atmosModel
-                
-                ### 
+
+                ###
+                ### GRAVITY
+                ###
+
+                # make sure to reset the Cnm/Snm for Moon gravity in case
+                # tides are used (may have altered values in previous segment)
+                if self.MoonTides:
+                    self.clmMoon.coeffs = self.clmMoon.coeffsOrig * 1.0
+
+                ###
                 ### PROPAGATION
                 ###
-                
-                # in last segment, don't care of propagation mode, just fill 
+
+                # in last segment, don't care of propagation mode, just fill
                 # in last statevec & exit
                 if i==len(self.MD.missionSegments)-1:
-                    
+
                     # write data to TempDF
                     self.TempDF['JD_TBD'] = self.JD
                     self.TempDF['MET'] = self.METvec[0]
                     self.TempDF[['x','y','z','vx','vy','vz']] = self.statevec
-                    
-                    # overwrite segment ID (otherwise it's a new segment and 
+
+                    # overwrite segment ID (otherwise it's a new segment and
                     # leads to bad visualization with the MRSvislib
                     self.TempDF['segmentID'] -= 1
-                    
+
                     # finalize missionDF
                     self.missionDF = pd.concat([self.missionDF, self.TempDF], ignore_index=True)
-                    
+
                     # exit segment loop - mission accomplished!
                     break
-                
-                
+
+
                 # standing at launch pad
                 if self.propaMode==0:
-                    
+
                     # propagate launchsite position in GCRF
                     self.propagate_Mode0()
-                
+
                 # free run mode propagation
                 elif self.propaMode==1:
-                   
+
                     # propagate without thrust/guidance control
                     self.propagate_Mode1()
-                    
+
                 # step-wise propagation
                 elif self.propaMode==2:
-                    
+
                     # propagate SC
                     self.propagate_Mode2()
-                    
+
                 # unknown mode
                 else:
                     print('MRS:\t\tERROR: Unknown propagation mode. Exiting \
@@ -778,80 +814,77 @@ class MRSmission():
                     # exit segment loop
                     break
 
-                
-                ### 
+
+                ###
                 ### POST-PROPAGATION IN-SEGMENT TODOS
                 ###
-               
+
                 # append segmentDF to missionDF
                 self.missionDF = pd.concat([self.missionDF, self.TempDF], ignore_index=True)
-                
 
-                
-                
-            ### 
+
+
+
+            ###
             ### APPLY DELTA-V MANEUVER
-            ###   
-            
+            ###
+
             elif self.MD.missionSegments['type'][i]==1:
-  
+
                 self.maneuverID = self.MD.missionSegments['configID'][i]
                 self.maneuverFrame = self.MD.maneuverSettings['frame'][self.maneuverID]
                 self.dv = self.MD.maneuverSettings.loc[self.maneuverID,['dx','dy','dz']].to_numpy().astype('float')
                 self.planet = self.MD.maneuverSettings['planet'][self.maneuverID]
                 self.args = self.MD.maneuverSettings['args'][self.maneuverID]
-                
+
                 if self.maneuverFrame == 'LVLH':
                     self.statevec = self.apply_deltaV_LVLH(self.JD, self.statevec, self.dv, planet=self.planet)
                 elif self.maneuverFrame == 'VNB':
                     self.statevec = self.apply_deltaV_VNB(self.JD, self.statevec, self.dv, planet=self.planet)
+                elif self.maneuverFrame == 'GCRF':
+                    self.statevec[3:] += self.dv
                 else:
                     print('MRS:\t\tERROR: Unknown maneuver type. Exiting segment processing.')
                     # exit segment loop
                     break
-                
-                
-                
-                
-              
-            
-        
+
+
             # unknown segment type
             else:
                 print('MRS:\t\tERROR: Unknown segment type. Exiting segment processing.')
                 # exit segment loop
                 break
-            
-            
-        ### 
+
+
+        ###
         ### POST MISSION TODOS
-        ### 
-        
+        ###
+
         # delete temp vars
         self.del_tempVars()
-        
+
         # end timer
-        toc = time.time() - tic
-        
+        self.toc = time.time() - tic
+
         # print final information
-        print('MRS:\t\tMission ended. Processing time: {} seconds.'.format(round(toc,3)))
-            
+        print('MRS:\t\tMission ended. Processing time: {} seconds.'.format(round(self.toc,3)))
+
         # save kind of missionDF (1=MRS sim, 2=external data)
         self.missionDFtype = 1
-        
+
         return None
-    
+
     def del_tempVars(self):
         """
         Internal function.
         Deletes temporary attributes of MRSmission object.
-        
+
         Returns
         -------
         None
-        
+
         """
-        
+
         if hasattr(self, 'TempDF'):
             del self.TempDF
         if hasattr(self, 'LOGvec'):
@@ -871,19 +904,11 @@ class MRSmission():
         if hasattr(self, 'planets'):
             del self.planets
         if hasattr(self, 'planet'):
-            del self.planet    
+            del self.planet
         if hasattr(self, 'EarthSHn'):
             del self.EarthSHn
         if hasattr(self, 'MoonSHn'):
             del self.MoonSHn
-        if hasattr(self, 'swDF'):
-            del self.swDF
-        if hasattr(self, 'f107s'):
-            del self.f107s
-        if hasattr(self, 'f107'):
-            del self.f107
-        if hasattr(self, 'Ap'):
-            del self.Ap
         if hasattr(self, 'atmosModel'):
             del self.atmosModel
         if hasattr(self, 'args'):
@@ -894,15 +919,26 @@ class MRSmission():
             del self.maneuverFrame
         if hasattr(self, 'dv'):
             del self.dv
-        
-        
+        if hasattr(self, 'SunPosGCRF'):
+            del self.SunPosGCRF
+        if hasattr(self, 'VenusPosGCRF'):
+            del self.VenusPosGCRF
+        if hasattr(self, 'MoonPosGCRF'):
+            del self.MoonPosGCRF
+        if hasattr(self, 'MoonVelGCRF'):
+            del self.MoonVelGCRF
+        if hasattr(self, 'MarsPosGCRF'):
+            del self.MarsPosGCRF
+        if hasattr(self, 'JupiterPosGCRF'):
+            del self.JupiterPosGCRF
+
         return None
 
     def propagate_Mode0(self):
         """
-        Internal function. 
+        Internal function.
         Propagates the state vector of the spacecraft standing on its launch
-        pad on earth by taking its coordinates and saving them in GCRF. 
+        pad on earth by taking its coordinates and saving them in GCRF.
 
         Returns
         -------
@@ -912,19 +948,19 @@ class MRSmission():
 
         # number of MET times required to be calculated
         numSteps = self.METvec.shape[0]
-        
+
         # pointer in TempDF
         TempDFpointer = 0
-        
+
         # loop through steps
         for i in range(numSteps):
-            
+
             # current JD
             JDnow = self.MD.t0_JD + (self.METvec[i] - self.MD.t0_MET) * SEC2DAYS
-            
+
             # get current statevec
             statevec = self.transform_LLAgeodetic_GCRF(JDnow, self.MD.launchsite_LLA)
-            
+
             # call spacecraft-thrust-function to display its output
             _, _, _ = self.SC.get_ThrustMassOther(self.METvec[i], 0, verbose='v')
 
@@ -932,45 +968,45 @@ class MRSmission():
             if self.LOGvec[i]==1:
                 self.TempDF.loc[TempDFpointer, ['MET']] = self.METvec[i]
                 self.TempDF.loc[TempDFpointer, ['JD_TBD']] = JDnow
-                self.TempDF.loc[TempDFpointer, ['x','y','z','vx','vy','vz']] = statevec 
+                self.TempDF.loc[TempDFpointer, ['x','y','z','vx','vy','vz']] = statevec
                 # increase pointer for next row
                 TempDFpointer += 1
-        
+
         # update state final vector
         self.statevec = statevec
         self.JD = self.MD.t0_JD + (self.MD.missionSegments['MET'][self.segmentID+1] - self.MD.t0_MET) * SEC2DAYS
-        
+
         return None
-        
-        
-    
+
+
+
     def propagate_Mode1(self):
         """
         Internal function.
         Propagates the spaecraft within the given mission segment; auto-step
-        size control by the given integrator. 
+        size control by the given integrator.
         To be used with passive spacecrafts.
-        Not recommended for active spacecrafts with thrust and guidance. 
-        Resulting state vectors are stored to TempDF and (in run_mission()) 
+        Not recommended for active spacecrafts with thrust and guidance.
+        Resulting state vectors are stored to TempDF and (in run_mission())
         to the missionDF.
-        
+
 
         Returns
         -------
         None
 
         """
-        
+
         # special function to serve as crash event on Earth for integrator termination
         def EndFlightEvent(t, y):
             return self.get_EarthAlt(t, y)
         # end mission if crash occurs
         EndFlightEvent.terminal  = True
         EndFlightEvent.direction = -1.
-        
+
         # prepare solve_ivp variables
         fun = self.get_slopes
-        t_span = np.array([self.MD.missionSegments['MET'][self.segmentID], 
+        t_span = np.array([self.MD.missionSegments['MET'][self.segmentID],
                            self.MD.missionSegments['MET'][self.segmentID+1]])
         y0 = self.statevec
         method = self.MD.propaSettings['method'][self.propaID] # get from dataframe
@@ -979,16 +1015,16 @@ class MRSmission():
         atol = self.integrator_atol
         rtol = self.integrator_rtol
         first_step = 3
-        
+
         # perform solve_ivp
         # https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html
-        sol = solve_ivp(fun, t_span, y0, method, dense_output = dense_output, 
-                        events=EndFlightEvent, first_step=first_step, 
+        sol = solve_ivp(fun, t_span, y0, method, dense_output = dense_output,
+                        events=EndFlightEvent, first_step=first_step,
                         max_step=max_step, atol=atol, rtol=rtol)
-    
+
         # METs at which logging is required; don't consider last MET, as not indexed by LOGvec
         METlog = self.METvec[self.LOGvec==1]
-        
+
         # update final state vector
         self.statevec = sol.y.T[-1] # last computed state vector
         self.JD = self.MD.t0_JD + (sol.t.T[-1]  - self.MD.t0_MET) * SEC2DAYS
@@ -999,26 +1035,26 @@ class MRSmission():
             # delete METlog timestampe after crash
             METlog = METlog[METlog<sol.t_events[0][0]]
             # add MET for crash
-            METlog = np.append(METlog, sol.t_events[0][0])  
+            METlog = np.append(METlog, sol.t_events[0][0])
             # adjust length of TempDF
             self.TempDF = self.TempDF.head(len(METlog))
             # save crash
             self.eventCrashed = 1
             # append to eventsDF
             self.add_event(self.JD, self.statevec, 'EarthCollision')
-       
+
         # get dense data for required METs
         sol_statevecs = sol.sol(METlog)
-        
-        # save to TempDF 
+
+        # save to TempDF
         self.TempDF['MET'] = METlog
         self.TempDF['JD_TBD'] = self.MD.t0_JD + (METlog - self.MD.t0_MET) * SEC2DAYS
         self.TempDF[['x','y','z','vx','vy','vz']] = sol_statevecs.T
-        
+
         self.sol = sol
-        
+
         return None
-    
+
     def propagate_Mode2(self):
         """
         Internal function.
@@ -1026,65 +1062,65 @@ class MRSmission():
         size (provided in misison data propaSettings)
         To be used with active spacecrafts.
         Not recommended for passible spacecrafts.
-        Resulting state vectors are stored to TempDF and (in run_mission()) 
+        Resulting state vectors are stored to TempDF and (in run_mission())
         to the missionDF.
-        
+
 
         Returns
         -------
         None
 
         """
-        
-        # save first statevector 
+
+        # save first statevector
         self.TempDF.loc[0,['MET']] = self.METvec[0]
         self.TempDF.loc[0,['JD_TBD']] = self.MD.t0_JD + (self.METvec[0] - self.MD.t0_MET) * SEC2DAYS
         self.TempDF.loc[0,['x','y','z','vx','vy','vz']] = self.statevec
-    
+
         # special function to serve as crash event on Earth for integrator termination
         def EndFlightEvent(t, y):
             return self.get_EarthAlt(t, y)
         # end mission if crash occurs
         EndFlightEvent.terminal  = True
         EndFlightEvent.direction = -1.
-    
+
         # prepare fixed solve_ivp variables
         fun = self.get_slopes
         #statevec = self.statevec
-        method = self.MD.propaSettings['method'][self.propaID] 
+        method = self.MD.propaSettings['method'][self.propaID]
         dense_output = True
         max_step = self.integrator_max_step
         atol = self.integrator_atol
         rtol = self.integrator_rtol
         first_step = 3
-        
- 
+
+
         # number of MET times required to be calculated
         numSteps = self.METvec.shape[0]
-        
+
         # pointer in TempDF; skip first row because alrady written
         TempDFpointer = 1
-        
+
         # loop through steps
         for i in range(numSteps-1):
-            
+
             # prepare solve_ivp variables
             t_span = np.array([self.METvec[i], self.METvec[i+1]])
             y0 = self.statevec
-            
-            # set fixed pointer for spacecraft 
+
+            # set fixed pointer for spacecraft
             self.SC.set_fixedThrottlePointer(self.METvec[i])
-            
+
             # perform solve_ivp
             # https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html
-            sol = solve_ivp(fun, t_span, y0, method, dense_output = dense_output, 
-                            events=EndFlightEvent, first_step=first_step, 
+            sol = solve_ivp(fun, t_span, y0, method, dense_output = dense_output,
+                            events=EndFlightEvent, first_step=first_step,
                             max_step=max_step, atol=atol, rtol=rtol)
-            
+
             # update state vector
             self.statevec = sol.y.T[-1] # last computed state vector
             self.JD = self.MD.t0_JD + (sol.t.T[-1]  - self.MD.t0_MET) * SEC2DAYS
-            
+
             # check if rocket crashed into Earth
             if sol.t_events[0].size>0:
                 print('MRS:\t\tWARNING: Collision with Earth, mission ended.')
@@ -1094,24 +1130,22 @@ class MRSmission():
                 self.add_event(self.JD, self.statevec, 'EarthCollision')
                 # shorten TempDF
                 self.TempDF = self.TempDF.head(TempDFpointer+1)
-              
+
             # save to logfile if needed; always one ahead, because the statevector for the following MET is calculated
             if self.LOGvec[i+1]==1 or self.eventCrashed==1:
-                self.TempDF.loc[TempDFpointer, ['MET']] = sol.t.T[-1] 
+                self.TempDF.loc[TempDFpointer, ['MET']] = sol.t.T[-1]
                 self.TempDF.loc[TempDFpointer, ['JD_TBD']] = self.JD
-                self.TempDF.loc[TempDFpointer, ['x','y','z','vx','vy','vz']] = self.statevec 
+                self.TempDF.loc[TempDFpointer, ['x','y','z','vx','vy','vz']] = self.statevec
                 # increase pointer for next row
                 TempDFpointer += 1
-            
+
             # exit in case of crash
             if self.eventCrashed == 1:
                 # exit steps-loop
                 break
-                
-        # clear spacecraft pointer      
-        self.SC.reset_fixedThrottlePointer()
 
-        
+        # clear spacecraft pointer
+        self.SC.reset_fixedThrottlePointer()
 
         return None
 
@@ -1123,7 +1157,7 @@ class MRSmission():
         Parameters
         ----------
         MET : float
-            Mission Elapsed Time 
+            Mission Elapsed Time
         y : array of floats
             State vector
 
@@ -1133,16 +1167,16 @@ class MRSmission():
             Altitude [m]
 
         """
-        
+
         # calculate current JD_TBD
-        JDnow = self.MD.t0_JD + (MET - self.MD.t0_MET) * SEC2DAYS 
-        
+        JDnow = self.MD.t0_JD + (MET - self.MD.t0_MET) * SEC2DAYS
+
         # get geodetic coordinates (lat [°], lon [°], alt [m])
         LLAgeodetic = self.transform_GCRF_LLAgeodetic(JDnow, y[:3])
-        
+
         return LLAgeodetic[2]
-    
-    
+
+
     def get_slopes(self, MET, y):
         """
         Internal function.
@@ -1151,7 +1185,7 @@ class MRSmission():
         Parameters
         ----------
         MET : float
-            Mission Elapsed Time 
+            Mission Elapsed Time
         y : array of floats
             State vector
 
@@ -1163,8 +1197,8 @@ class MRSmission():
         """
 
         return np.hstack((y[3:6], self.get_acceleration(MET, y)))
-    
-    
+
+
     def get_acceleration(self, MET, y):
         """
         Internal function.
@@ -1177,7 +1211,7 @@ class MRSmission():
         Parameters
         ----------
         MET : float
-            Mission Elapsed Time 
+            Mission Elapsed Time
         y : array of floats
             State vector
 
@@ -1187,49 +1221,53 @@ class MRSmission():
             Acceleration in the GCRF frame.
 
         """
-       
+
         # calculate current JD_TBD
-        JDnow = self.MD.t0_JD + (MET - self.MD.t0_MET) * SEC2DAYS 
-       
+        JDnow = self.MD.t0_JD + (MET - self.MD.t0_MET) * SEC2DAYS
+
+        # preload pos/vel of relevant celestial bodies
+        self.preload_ObjectPosVel(JDnow)
+        preloadFlag = 1
+
         # get acceleration from planets
-        accPlanets = self.get_accPlanets(MET, y, JDnow)
-        
+        accPlanets = self.get_accPlanets(MET, y, JDnow, preloadedObjects=preloadFlag)
+
         # static values are always loaded
         staticMass, staticDragArea, staticCd, staticCr, staticSRParea\
                 = self.SC.get_staticvalues()
-        
-            
+
+
         # load values in function of active/static SC + Thrust calculation
         if self.activeSC:
-            
+
             # get temperature/pressure/density/M1
-            atmosvalues = self.get_atmos(JDnow, y[:3]) 
-            
-            # get spacecraft properties 
+            atmosvalues = self.get_atmos(JDnow, y[:3])
+
+            # get spacecraft properties
             thrustForce, SCmass, _ = self.SC.get_ThrustMassOther(MET, \
                                                    atmosvalues[1], verbose='v')
-            
+
             # get guidance
-            thrustVector = np.zeros(3) # not implemented yet 
+            thrustVector = np.zeros(3) # not implemented yet
 
             # acceleration by TVC
             accThrust = thrustVector * thrustForce / SCmass
         else:
             accThrust = 0
-        
+
         # calculate drag acceleration if required
         if self.dragOn:
             # if active spacecraft:
             if self.activeSC:
-                
+
                 # get numbers needed to calc drag
                 vrel = self.get_relVelocityEarth(JDnow, y)
                 rho = atmosvalues[2]
                 mach = atmosvalues[3]
-                
+
                 # calc drag acceleration
                 accDrag = self.SC.get_DragF(MET, vrel, rho, mach) / SCmass
-                
+
             else:
                 # dynPress comes as a vector in direction of velocity
                 accDrag = - self.get_dynPress(MET, y, JDnow) * \
@@ -1241,27 +1279,88 @@ class MRSmission():
         # Calculate solar radiation pressure acceleration if required
         # Only static SC values considered at the moment.
         if self.SRPOn:
-            
+
             # get the visibility factor and the vector pointing from SC to Sun.
-            v, SCtoSun, occultingBodies = self.get_sunVisibility(JDnow, y[:3])
-            
+            v, SCtoSun, occultingBodies = \
+                self.get_sunVisibility(JDnow, y[:3], preloadedObjects=preloadFlag)
+
             # get SRP force
             SRPforce = self.get_SRPForce(v, staticCr, staticSRParea, SCtoSun)
-            
+
             # acceleration by SRP
             accSRP = SRPforce / staticMass
-     
+
         else:
             accSRP = np.zeros(3)
 
-        
-        # sum up accelerations 
+
+        # sum up accelerations
         acceleration = accPlanets + accDrag + accThrust + accSRP
-       
+
         return acceleration
-    
+
+    def preload_ObjectPosVel(self, JDnow):
+        """
+        Internal function.
+        Loads positions of required planets (self.planets) into temporary
+        variables, as well as the position and velocity of the Moon.
+        Used to speed up the overall computation by calling Skyfield planet-
+        positions only once.
+
+        Parameters
+        ----------
+        JDnow : float
+            Current Julian Date (TBD)
+
+        Returns
+        -------
+        None.
+
+        """
+
+        # get position & velocity of Earth
+        EarthJDnow = self.earth.at(ts.tdb_jd(JDnow))
+        EarthPosICRF = EarthJDnow.position.m
+        EarthVelICRF = EarthJDnow.velocity.m_per_s
+
+        # loop through planets
+        for planet in self.planets:
+            if planet=='Sun':
+                objectPos = self.sun.at(ts.tdb_jd(JDnow)).position.m
+                self.SunPosGCRF = objectPos - EarthPosICRF
+            elif planet=='Venus':
+                objectPos = self.venus.at(ts.tdb_jd(JDnow)).position.m
+                self.VenusPosGCRF = objectPos - EarthPosICRF
+            elif planet=='Earth':
+                continue
+            elif planet=='Moon':
+                MoonNow = self.moon.at(ts.tdb_jd(JDnow))
+                objectPos = MoonNow.position.m
+                objectVel = MoonNow.velocity.m_per_s
+                self.MoonPosGCRF = objectPos - EarthPosICRF
+                self.MoonVelGCRF = objectVel - EarthVelICRF
+            elif planet=='Mars':
+                objectPos = self.mars.at(ts.tdb_jd(JDnow)).position.m
+                self.MarsPosGCRF = objectPos - EarthPosICRF
+            elif planet=='Jupiter':
+                objectPos = self.jupiter.at(ts.tdb_jd(JDnow)).position.m
+                self.JupiterPosGCRF = objectPos - EarthPosICRF
+            else:
+                print('MRS:\t\tERROR: invalid planet name provided in forcesSettings.')
+                continue
+
+
+        # load Sun if needed for SRP
+        if not 'Sun' in self.planets and 1 in self.MD.forcesSettings.SRP.values:
+            objectPos = self.sun.at(ts.tdb_jd(JDnow)).position.m
+            self.SunPosGCRF = objectPos - EarthPosICRF
+
+        return None
+
     def get_SRPForce(self, v, Cr, SRParea, SCtoSun):
         """
+        Internal function.
+        Calculates force caused by Solar Radiation Pressure (SRP).
 
         Parameters
         ----------
@@ -1277,30 +1376,33 @@ class MRSmission():
         Returns
         -------
         SRPforce : array of floats
-            SRP force on spaecraft 
+            SRP force on spaecraft
 
         """
-        
+
         SRPforce = - v * Cr * SRParea * SRP1AU * SCtoSun \
                      * AU**2 / np.linalg.norm(SCtoSun)**3
-                     
+
         return SRPforce
-    
-    def get_accPlanets(self, MET, y, JDnow):
+
+    def get_accPlanets(self, MET, y, JDnow, preloadedObjects=0):
         """
         Internal function.
         Returns the cummulated acceleration caused by planets.
         Selection of relevant planets is made mission data forceSettings.
-        
+
 
         Parameters
         ----------
         MET : float
-            Mission Elapsed Time 
+            Mission Elapsed Time
         y : array of floats
             State vector
         JDnow : float
             Current Julian Date (TBD)
+        preloadedObjects : int, optional
+            Whether to compute the Moon pos/vel while execution (0) or use
+            preloaded values (faster.)
 
         Returns
         -------
@@ -1308,42 +1410,62 @@ class MRSmission():
             Acceleration by planet gravities in the GCRF frame.
 
         """
-        
+
         # get current spacecraft position
         SCpos = y[:3]
-        
+
         # accumulator for planet acceleration
         accPlanets = np.zeros(3)
-        
-        # get position of Earth
-        EarthPos = self.earth.at(ts.tdb_jd(JDnow)).position.m
-        
+
+        # get position of Earth if not using preloaded GCRF position of objects
+        if not preloadedObjects:
+            EarthPos = self.earth.at(ts.tdb_jd(JDnow)).position.m
+
         # loop through planets
         for planet in self.planets:
-            
+
             # get positions (in ECI) and GM-values of planets
             if planet=='Sun':
                 GM = self.SUN_GM
-                objectPos = self.sun.at(ts.tdb_jd(JDnow)).position.m
+                if preloadedObjects:
+                    objectToEarth = self.SunPosGCRF
+                else:
+                    objectPos = self.sun.at(ts.tdb_jd(JDnow)).position.m
+
             elif planet=='Venus':
                 GM = self.VENUS_GM
-                objectPos = self.venus.at(ts.tdb_jd(JDnow)).position.m
+                if preloadedObjects:
+                    objectToEarth = self.VenusPosGCRF
+                else:
+                    objectPos = self.venus.at(ts.tdb_jd(JDnow)).position.m
+
             elif planet=='Earth':
                 GM = self.EARTH_GM
-                objectPos = np.zeros(3)
+
             elif planet=='Moon':
                 GM = self.MOON_GM
-                objectPos = self.moon.at(ts.tdb_jd(JDnow)).position.m
+                if preloadedObjects:
+                    objectToEarth = self.MoonPosGCRF
+                else:
+                    objectPos = self.moon.at(ts.tdb_jd(JDnow)).position.m
+
             elif planet=='Mars':
                 GM = self.MARS_GM
-                objectPos = self.mars.at(ts.tdb_jd(JDnow)).position.m
+                if preloadedObjects:
+                    objectToEarth = self.MarsPosGCRF
+                else:
+                    objectPos = self.mars.at(ts.tdb_jd(JDnow)).position.m
+
             elif planet=='Jupiter':
                 GM = self.JUPITER_GM
-                objectPos = self.jupiter.at(ts.tdb_jd(JDnow)).position.m
+                if preloadedObjects:
+                    objectToEarth = self.JupiterPosGCRF
+                else:
+                    objectPos = self.jupiter.at(ts.tdb_jd(JDnow)).position.m
             else:
-                print('MRS:\t\tERROR: invalid planet name provided in forcesSettings.')
+                # empty entry or invalid planet
                 continue
-            
+
             # calculate acceleration
             if planet == 'Earth':
                 # get degree of SH coefficients
@@ -1355,33 +1477,34 @@ class MRSmission():
                 else:
                     r_norm = np.linalg.norm(SCpos)
                     objectAcc = - GM * SCpos/r_norm**3
-                
+
             elif planet == 'Moon':
                 # get degree of SH coefficients
                 lmax = self.MoonSHn
                 # get SH-gravity if lmax provided
                 if lmax:
-                    objectAcc = self.get_MoonGravity(JDnow, y, lmax)
+                    objectAcc = self.get_MoonGravity(JDnow, y, lmax, preloadedObjects=preloadedObjects)
                 # if no lmax, use point gravity
                 else:
-                    objectToEarth = objectPos - EarthPos
+                    if not preloadedObjects:
+                        objectToEarth = objectPos - EarthPos
                     objectToSat =  objectToEarth - SCpos
-                    
                     objectAcc = self.get_ThirdBodyAcc(objectToEarth, objectToSat, SCpos, GM)
-                
+
             else:
-                objectToEarth = objectPos - EarthPos
+                if not preloadedObjects:
+                    objectToEarth = objectPos - EarthPos
                 objectToSat =  objectToEarth - SCpos
-                
                 objectAcc = self.get_ThirdBodyAcc(objectToEarth, objectToSat, SCpos, GM)
-            
+
             # add up accelerations
             accPlanets += objectAcc
-            
+
         return accPlanets
-    
+
     def get_ThirdBodyAcc(self, bodyToEarth, bodyToSC, SCtoEarth, GM):
         """
+        Internal function.
         Returns the acceleratin of a celestial body in GCRF.
 
         Parameters
@@ -1401,19 +1524,19 @@ class MRSmission():
             Acceleration caused by body expressed in ICRF/GCRF
 
         """
-        
+
         # equations according to "Orbital Mechanics for Engineering Students", 12.11, page 713
         q = SCtoEarth.dot(2*bodyToEarth-SCtoEarth) / np.linalg.norm(bodyToEarth)**2 # 12.131
         Fq = q * (q**2 - 3*q + 3)/(1 + (1-q)**(3/2)) # F.3
         # calc object acceleration/perturbation on satellite in ECI frame
         objectAcc = GM / np.linalg.norm(bodyToSC)**3 * (Fq*bodyToEarth - SCtoEarth) # 12.130
-        
+
         return objectAcc
-        
-    
-    def get_sunVisibility(self, JDnow, GCRFpos):
+
+
+    def get_sunVisibility(self, JDnow, GCRFpos, preloadedObjects=0):
         """
-        Internal functions. 
+        Internal functions.
         Return the degree of Sun visibility (1=visible, 0=not visible), taking
         also into account the Penumbra (partial occultation).
         Required for precise simulation of SRP
@@ -1424,47 +1547,53 @@ class MRSmission():
             Current Julian Date (TBD)
         GCRFpos : array of floats
             Position of spacecraft in GCRF (i.e. first half of state vector)
+        preloadedObjects : int, optional
+            Whether to compute the Moon pos/vel while execution (0) or use
+            preloaded values (faster.)
 
         Returns
         -------
         v : float
             Visibility of the Sun (0-1, not visible to fully visible)
         SCtoSun : array of float
-            Vector from SC to the Sun (in GCRF), needed for SRP-direction. 
+            Vector from SC to the Sun (in GCRF), needed for SRP-direction.
         occultingBodies : string
             Objects that lead to the occultation. For logfile.
 
         """
-    
-        # Sun and Earth positions in ICRF
-        SunPos   = self.sun.at(ts.tdb_jd(JDnow)).position.m
-        EarthPos = self.earth.at(ts.tdb_jd(JDnow)).position.m
-        
+
         # Sun pos in GCRF
-        SunPosGCRF = SunPos - EarthPos
-        
+        if preloadedObjects:
+            SunPosGCRF = self.SunPosGCRF
+        else:
+            SunPos   = self.sun.at(ts.tdb_jd(JDnow)).position.m
+            EarthPos = self.earth.at(ts.tdb_jd(JDnow)).position.m
+            SunPosGCRF = SunPos - EarthPos
+
         # SC to Sun
         SCtoSun = SunPosGCRF - GCRFpos
-    
+
         # get visibility for Earth
         vEarth = self.get_sunOccultation(SCtoSun, np.zeros(3), EARTH_RADIUS, GCRFpos)
-        
+
         # default: no occultation by the Moon
         vMoon = 1
         # in case a moon is present, calculate also its occultation
         if 'Moon' in self.planets:
-            
-            MoonPos = self.moon.at(ts.tdb_jd(JDnow)).position.m
             # Moon Pos in GCRF
-            MoonPosGCRF = MoonPos - EarthPos 
-            
+            if preloadedObjects:
+                MoonPosGCRF = self.MoonPosGCRF
+            else:
+                MoonPos = self.moon.at(ts.tdb_jd(JDnow)).position.m
+                MoonPosGCRF = MoonPos - EarthPos
+
             # get visibility for Moon
             vMoon = self.get_sunOccultation(SCtoSun, MoonPosGCRF, MOON_RADIUS, GCRFpos)
-            
+
         # combine occultation from Earth and Moon
         v = np.min([vEarth, vMoon])
 
-            
+
         # string for logfile
         if vEarth==1 and vMoon == 1:
             occultingBodies = ''
@@ -1477,16 +1606,16 @@ class MRSmission():
         else:
             # shouldn't happen!
             occultingBodies = 'ERROR'
-        
-    
+
+
         return v, SCtoSun, occultingBodies
-        
+
     def get_sunOccultation(self, SCtoSun, BodyPosGCRF, BodyRadius, SCpos):
         """
-        Internal function. 
-        This function returns the amount of Sun visibility in 
+        Internal function.
+        This function returns the amount of Sun visibility in
         regard of the provided celestial body.
-        
+
 
         Parameters
         ----------
@@ -1502,28 +1631,28 @@ class MRSmission():
         Returns
         -------
         v: float
-            Sun visibility (0 <= v <= 1) 
+            Sun visibility (0 <= v <= 1)
 
         """
         # Method by Montenbruck & Gill, Satellite Orbits, 2012
-       
+
         # SC to Body
         SCtoBody = BodyPosGCRF - SCpos
-       
+
         # terminate if spacecraft is below body radius (method doesnt work then)
         if np.linalg.norm(SCtoBody)<BodyRadius:
             return 0, SCtoSun
-       
+
         # Method by Montenbruck & Gill, Satellite Orbits, 2012
-        
+
         # angle at which Sun is seen from spacecraft
         a = np.arcsin(SUN_RADIUS/np.linalg.norm(SCtoSun))
         # angle at which Earth is seen from spacecraft
         b = np.arcsin(BodyRadius/np.linalg.norm(SCtoBody))
-        # angle between the center of body and the center of the Sun 
+        # angle between the center of body and the center of the Sun
         c = np.arccos( (SCtoBody).dot(SCtoSun) / (np.linalg.norm(SCtoBody) * np.linalg.norm(SCtoSun)))
-         
-        
+
+
         # different cases
         if (a+b)<= c:
             v = 1 # no occultation
@@ -1538,8 +1667,8 @@ class MRSmission():
             v = 1 - A/(np.pi * a**2)
 
         return v
-    
-    
+
+
     def transform_GCRF_LLAgeodetic(self, JDnow, GCRFpos):
         """
         Internal function. Vectorized.
@@ -1559,20 +1688,20 @@ class MRSmission():
             Latitude [°], longitude [°], geodetic altitude [m]
 
         """
-        
+
         if GCRFpos.ndim==1:
             statepos = GCRFpos[:3]
-            
+
         else:
             statepos = GCRFpos[:,:3].T
-        
-        t = ts.tdb_jd(JDnow) 
+
+        t = ts.tdb_jd(JDnow)
         d = Distance(m=statepos)
         p = Geocentric(d.au, t=t) # GCRF
         g = wgs84.geographic_position_of(p)
-        
+
         return np.squeeze([g.latitude.degrees, g.longitude.degrees, g.elevation.m]).T
-        
+
     def transform_GCRF_LLAgeocentric(self, JDnow, GCRFpos):
         """
         Internal function.
@@ -1592,19 +1721,19 @@ class MRSmission():
             Latitude [°], longitude [°], geocentric altitude [m]
 
         """
-        
-        t = ts.tdb_jd(JDnow) 
+
+        t = ts.tdb_jd(JDnow)
         d = Distance(m=GCRFpos)
         p = Geocentric(d.au, t=t)  # GCRF
         lla = p.frame_latlon(itrs)
-        
+
         return np.squeeze([lla[0].degrees, lla[1].degrees, lla[2].m])
-    
+
     def transform_LLAgeodetic_GCRF(self, JDnow, lla):
         """
         Internal function.
         Transform geodetic LLA coordinates at given Julian Date to a state
-        vector in the GCRF. 
+        vector in the GCRF.
         See: https://rhodesmill.org/skyfield/api-topos.html
 
         Parameters
@@ -1620,14 +1749,14 @@ class MRSmission():
             State vector in GCRF
 
         """
-   
-        t = ts.tdb_jd(JDnow) 
+
+        t = ts.tdb_jd(JDnow)
         itrsXYZ = wgs84.latlon(lla[0], lla[1], elevation_m=lla[2]).itrs_xyz
         p = ITRSPosition(itrsXYZ) # ITRS
         y = np.hstack([p.at(t).position.m, p.at(t).velocity.m_per_s]) # GCRF
-        
+
         return y
-        
+
     def get_EarthGravity(self, JDnow, GCRFpos, lmax):
         """
         Internal function.
@@ -1641,36 +1770,36 @@ class MRSmission():
         GCRFpos : array of floats
             GCRF position of spacecraft
         lmax : int
-            Max. amount of degree of spherical harmonics 
+            Max. amount of degree of spherical harmonics
 
         Returns
         -------
         aGCRF : array of floats
-            Accleration by Earth in GCRF frame 
+            Accleration by Earth in GCRF frame
 
         """
-        
+
         # get geocentric position of SC rel. to Earth
         LLAgeocentric = self.transform_GCRF_LLAgeocentric(JDnow, GCRFpos)
-              
+
         # get spherical acceleration vector
-        dUvalues = pysh.gravmag.MakeGravGridPoint(clmEarth.coeffs, clmEarth.gm, clmEarth.r0, LLAgeocentric[2], LLAgeocentric[0], LLAgeocentric[1], lmax)
-       
+        dUvalues = pysh.gravmag.MakeGravGridPoint(self.clmEarth.coeffs, self.clmEarth.gm, self.clmEarth.r0, LLAgeocentric[2], LLAgeocentric[0], LLAgeocentric[1], lmax)
+
         # calc acceleration in Earth ITRS frame
         aXYZ = self.transform_SPH_CART(LLAgeocentric[0]*DEG2RAD, LLAgeocentric[1]*DEG2RAD, dUvalues[0], -dUvalues[1],dUvalues[2])
-        
+
         # rotation matrix from GCRF to ITRS
         R = itrs.rotation_at(ts.tdb_jd(JDnow))
-        
+
         # apply rotation (ITRS to GCRF)
         aGCRF = np.linalg.inv(R).dot(aXYZ) # more accurate
         #aGCRF = R.T.dot(aXYZ) # faster
-        
+
         return aGCRF
-    
+
     def transform_GCRF_TrueEq(self, JDnow, y):
         """
-        Internal function. Vectorized. 
+        Internal function. Vectorized.
         Transforms the state vector from GCRF to "true equator and equinox
         of date", i.e. "ECI-Frame", only rotated by the GAST-angle rel. to
         the ECEF-frame.
@@ -1688,11 +1817,11 @@ class MRSmission():
             State vector in "true equator and equinox of date"
 
         """
-        
+
         # get rotation matrix from GCRF to true equator and equinox of date
         # https://rhodesmill.org/skyfield/api-framelib.html#skyfield.framelib.true_equator_and_equinox_of_date
         R = true_equator_and_equinox_of_date.rotation_at(ts.tdb_jd(JDnow))
-        
+
         # for single statevecs
         if y.ndim==1:
             # rotate position
@@ -1706,11 +1835,11 @@ class MRSmission():
             for i in range(R.shape[2]):
                 yTrueEq[i,:3] = R[:,:,i].dot(y[i,:3])
                 yTrueEq[i,3:] = R[:,:,i].dot(y[i,3:])
-            
-            
+
+
         return yTrueEq
-    
-    def get_MoonGravity(self, JDnow, y, lmax):
+
+    def get_MoonGravity(self, JDnow, y, lmax, preloadedObjects=0):
         """
         Internal function.
         Returns the acceleration by the Moon including spherical harmonics.
@@ -1723,39 +1852,136 @@ class MRSmission():
         y : array of floats
             State vector in GCRF
         lmax : int
-            Max. amount of degree of spherical harmonics 
+            Max. amount of degree of spherical harmonics
+        preloadedObjects : int, optional
+            Whether to compute the Moon pos/vel while execution (0) or use
+            preloaded values (faster.)
 
         Returns
         -------
         aXYZ_GCRF : array of floats
-            Accleration by Moon in GCRF frame 
+            Accleration by Moon in GCRF frame
 
         """
-        
+        # change Cnm/Snm if lunar tides are activated
+        if self.MoonTides:
+            # get deltas for Cnm/Snm
+            dcoeffs = self.get_MoonTidesCoeffs(JDnow, preloadedObjects=preloadedObjects)
+            # load original coeffs
+            self.clmMoon.coeffs = self.clmMoon.coeffsOrig * 1.0
+            # apply deltas
+            self.clmMoon.coeffs[:,2,:3] += dcoeffs
+
+
         # get geocentric position of SC rel. to Moon (LLA and xyz, plus Moon position and rotation matrix)
-        LLAgeocentric, MoonFixedPos, MoonPos, MoonVel, SatMoonXYZVel, R, _, _ = self.transform_GCRF_MoonLLAgeocentric(JDnow, y, 'PA')
-        
+        LLAgeocentric, MoonFixedPos, MoonPos, MoonVel, SatMoonXYZVel, R, _, _ = \
+            self.transform_GCRF_MoonLLAplanetocentric(JDnow, y, 'PA', preloadedObjects=preloadedObjects)
+
         # get spherical acceleration vector
-        dUvalues = pysh.gravmag.MakeGravGridPoint(clmMoon.coeffs, clmMoon.gm, clmMoon.r0, LLAgeocentric[2], LLAgeocentric[0], LLAgeocentric[1], lmax )
-       
-        # calc acceleration in Moon CI frame
+        dUvalues = pysh.gravmag.MakeGravGridPoint(self.clmMoon.coeffs, self.clmMoon.gm, self.clmMoon.r0, LLAgeocentric[2], LLAgeocentric[0], LLAgeocentric[1], lmax )
+
+        # calc acceleration in Moon PA frame
         aXYZ = self.transform_SPH_CART(LLAgeocentric[0]*DEG2RAD, LLAgeocentric[1]*DEG2RAD, dUvalues[0], -dUvalues[1], dUvalues[2])
-        
-        # apply rotation backk to GCRF
+
+        # apply rotation back to GCRF
         aXYZ_GCRF = np.linalg.inv(R).dot(aXYZ)
-    
+
         # calc third body acceleration
-        accThirdBody = -self.MOON_GM*(MoonPos/np.linalg.norm(MoonPos)**3) 
-        
+        accThirdBody = -self.MOON_GM*(MoonPos/np.linalg.norm(MoonPos)**3)
+
         # add third body acceleration
         aXYZ_GCRF += accThirdBody
-    
-        return aXYZ_GCRF    
-    
-    def transform_GCRF_MoonLLAgeocentric(self, JDnow, y, refSystem='PA'):
+
+        return aXYZ_GCRF
+
+    def get_MoonTidesCoeffs(self, JDnow, preloadedObjects=0):
         """
         Internal function.
-        Transforms the given GCRF position of a specraft in various 
+        Returns the delta-values for C/S-coefficients of the Moon Gravity
+        spherical harmonics for simulation of solid tides of the Moon.
+
+        Reference: equation 9 on page 7 of
+        "Estimating a High-Resolution Lunar Gravity Field and Time-Varying
+        Core Signature", Ryan S. Park et al., 2011.
+
+        Parameters
+        ----------
+        JDnow : float
+            Current Julian Date (TBD)
+        preloadedObjects : int, optional
+            Whether to compute the Moon pos/vel while execution (0) or use
+            preloaded values (faster).
+
+        Returns
+        -------
+        dcoeffs : array of floats (2x3)
+            Delta values for C (first row) and S (second row)
+
+        """
+
+        # GCRF position of sun
+        if preloadedObjects:
+            SunPos_GCRF = self.SunPosGCRF
+        else:
+            EarthPos_ICRF = self.earth.at(ts.tdb_jd(JDnow)).position.m
+            SunPos_ICRF   = self.sun.at(ts.tdb_jd(JDnow)).position.m
+            SunPos_GCRF = SunPos_ICRF - EarthPos_ICRF
+
+        # add zero speed to complete state vector (because not needed here)
+        SunPosVel_GCRF = np.append(SunPos_GCRF, np.zeros(3))
+
+        # LLA of bodies in Moon PA frame (latitude, longitude, altitude)
+        EarthMoonLLA, _, _, _, _, _, _, _ = \
+            self.transform_GCRF_MoonLLAplanetocentric(JDnow, np.zeros(6), preloadedObjects=preloadedObjects)
+        SunMoonLLA, _, _, _, _, _, _, _ = \
+            self.transform_GCRF_MoonLLAplanetocentric(JDnow, SunPosVel_GCRF, preloadedObjects=preloadedObjects)
+
+        # Solid Lunar Tide external Love numbers taken from GRAIL Primary Mission Data (2013)
+        # https://ai-solutions.com/_help_Files/solid_tides_model.htm
+        knm = np.array([[0,0,0],
+                        [0,0,0],
+                        [0.02408, 0.02414, 0.02394]])
+
+        # normalized Legendre polynomials Pnm
+        PnmEarth = pysh.legendre.legendre(2,np.sin(EarthMoonLLA[0] * DEG2RAD))
+        PnmSun   = pysh.legendre.legendre(2,np.sin(SunMoonLLA[0] * DEG2RAD))
+
+        # precalculate ratios-factors
+        ratiosEarth = (self.EARTH_GM/self.MOON_GM) * (MOON_RADIUS/EarthMoonLLA[2])**3
+        ratiosSun   = (self.SUN_GM/self.MOON_GM)   * (MOON_RADIUS/SunMoonLLA[2])**3
+
+        # delta coefficients (for n=2 and m=0...2 --> 3 values)
+        # first row: C2m, second row: S2m
+        dcoeffs = np.zeros((2,3))
+
+        # C2,0
+        dcoeffs[0,0] = knm[2,0] * ( \
+            ratiosEarth * PnmEarth[2,0] + \
+            ratiosSun   * PnmSun[2,0]) /5
+        # C2,1
+        dcoeffs[0,1] = knm[2,1] *  ( \
+            ratiosEarth * PnmEarth[2,1] * np.cos(EarthMoonLLA[1] * DEG2RAD) + \
+            ratiosSun   * PnmSun[2,1]   * np.cos(SunMoonLLA[1]   * DEG2RAD)) /5
+        # C2,2
+        dcoeffs[0,2] = knm[2,2] * ( \
+            ratiosEarth * PnmEarth[2,2] * np.cos(2 * EarthMoonLLA[1] * DEG2RAD) + \
+            ratiosSun   * PnmSun[2,2]   * np.cos(2 * SunMoonLLA[1] * DEG2RAD)) /5
+        # S2,1 = 0 due to Im(exp(i0)) = 0
+        # S2,1
+        dcoeffs[1,1] = knm[2,1] * ( \
+            ratiosEarth * PnmEarth[2,1] * np.sin(EarthMoonLLA[1] * DEG2RAD) + \
+            ratiosSun   * PnmSun[2,1]   * np.sin(SunMoonLLA[1]   * DEG2RAD)) /5
+        # S2,2
+        dcoeffs[1,2] = knm[2,2] * ( \
+            ratiosEarth * PnmEarth[2,2] * np.sin(2 * EarthMoonLLA[1] * DEG2RAD) + \
+            ratiosSun   * PnmSun[2,2]   * np.sin(2 * SunMoonLLA[1]   * DEG2RAD)) /5
+
+        return dcoeffs
+
+    def transform_GCRF_MoonLLAplanetocentric(self, JDnow, y, refSystem='PA', preloadedObjects=0):
+        """
+        Internal function.
+        Transforms the given GCRF position of a specraft in various
         Moon-centered positions.
 
         Parameters
@@ -1768,15 +1994,18 @@ class MRSmission():
             Lunar reference system. The default is 'PA'. Possible are:
                 PA: principal axis (for SH gravity calculations)
                 ME: Mean Earth/Polar Axis (for LLA calculations)
+        preloadedObjects : int, optional
+            Whether to compute the Moon pos/vel while execution (0) or use
+            preloaded values (faster.)
 
         Returns
         -------
         SatMoonLLA : array of floats
             Latitutde [°], longitude [°], radius to Moon center [m]
         SatMoonXYZ : array of floats
-            xyz psotion of spacecraft in the chosen lunar reference system
+            xyz position of spacecraft in the chosen lunar reference system
         MoonPos : array of floats
-            position of the Moon in GCRF 
+            position of the Moon in GCRF
         MoonVel : array of floats
             velocity of the Moon in GCRF
         SatMoonXYZVel : array of floats
@@ -1789,11 +2018,16 @@ class MRSmission():
             Velocity of spacecraft rel. to Moon in GCRF
 
         """
-        
+
         # get Moon position & velocity in ICRF/GCRF
-        MoonPos = self.moon.at(ts.tdb_jd(JDnow)).position.m - self.earth.at(ts.tdb_jd(JDnow)).position.m
-        MoonVel = self.moon.at(ts.tdb_jd(JDnow)).velocity.m_per_s - self.earth.at(ts.tdb_jd(JDnow)).velocity.m_per_s
-        
+        if preloadedObjects:
+            MoonPos = self.MoonPosGCRF
+            MoonVel = self.MoonVelGCRF
+        else:
+            MoonPos = self.moon.at(ts.tdb_jd(JDnow)).position.m - self.earth.at(ts.tdb_jd(JDnow)).position.m
+            MoonVel = self.moon.at(ts.tdb_jd(JDnow)).velocity.m_per_s - self.earth.at(ts.tdb_jd(JDnow)).velocity.m_per_s
+
+
         # Satellite rel. to Moon in ICRF/GCRF
         Sat2Moon = y[:3] - MoonPos
         Sat2MoonVel = y[3:] - MoonVel
@@ -1805,7 +2039,6 @@ class MRSmission():
         # else, it's ME (Mean Earth/Polar Axis)
         else:
             R = MoonFrameME.rotation_at(ts.tdb_jd(JDnow))
-        
 
         # Satpos in Moon XYZ
         SatMoonXYZ = R.dot(Sat2Moon)
@@ -1818,10 +2051,10 @@ class MRSmission():
 
         # put data together
         SatMoonLLA = np.array([latitude, longitude, altitude])
-        
+
         return SatMoonLLA, SatMoonXYZ, MoonPos, MoonVel, SatMoonXYZVel, R, Sat2Moon, Sat2MoonVel
-    
-    
+
+
     def transform_SPH_CART(self, lat, lon, dUr, dUlat, dUlon):
         """
         Internal function.
@@ -1829,14 +2062,14 @@ class MRSmission():
         coordinates into a 3d cartesian vector.
         For geocentric coordinates only!
 
-        Parameters
+        Parameter
         ----------
         lat : float
             latiitude [°]
         lon : float
             longitude [°]
         dUr : float
-            vector component in radial direction 
+            vector component in radial direction
         dUlat : float
             vector component along the meridians ("north/south")
         dUlon : float
@@ -1845,10 +2078,10 @@ class MRSmission():
         Returns
         -------
         aXYZ : array of floats
-            3d vector in cartesian coordinates 
+            3d vector in cartesian coordinates
 
         """
-        
+
         clat = np.cos(lat)
         clon = np.cos(lon)
         slat = np.sin(lat)
@@ -1858,12 +2091,12 @@ class MRSmission():
             [clat*clon, -slon, -slat*clon],
             [clat*slon,  clon, -slat*slon],
             [slat,       0.   , clat]
-            ]) 
+            ])
 
         aXYZ = rot_matrix.dot(np.array([dUr, dUlon, dUlat]))
-        
+
         return aXYZ
-    
+
     def get_dynPress(self, MET, y, JDnow):
         """
         Internal function.
@@ -1872,7 +2105,7 @@ class MRSmission():
         Parameters
         ----------
         MET : float
-            Mission Elapsed Time 
+            Mission Elapsed Time
         y : array of floats
             State vector
         JDnow : float
@@ -1884,21 +2117,25 @@ class MRSmission():
             dynamic pressure as a vector (in direction of velocity vector)
 
         """
-        
+
         # get temperature/pressure/density/M1
         atmosvalues = self.get_atmos(JDnow, y[:3])
-        
+
         # get relative velocity
         ECEFvel = self.get_relVelocityEarth(JDnow, y)
-        
+
         # calc dynamic pressure (as a vector)
-        dynPress = 0.5 * atmosvalues[2] * np.linalg.norm(ECEFvel) * ECEFvel 
-        
+        # the linear transformation can be used to get density values similar to MSISE-90
+        if self.transToMSISE90:
+            dynPress = 0.5 * (self.RhoGain * atmosvalues[2] + self.RhoOffset) * np.linalg.norm(ECEFvel) * ECEFvel
+        else:
+            dynPress = 0.5 * atmosvalues[2] * np.linalg.norm(ECEFvel) * ECEFvel
+
         return dynPress
-    
+
     def get_relVelocityEarth(self, JDnow, y):
         """
-        Internal function. 
+        Internal function.
         Returns the velocity vector relative to the (rotating) Earth. Needed
         for atmospheric influence, e.g. for drag calculations.
         Not vectorized for fast computation of single values
@@ -1916,7 +2153,7 @@ class MRSmission():
             Relative velocity vector, described in GCRF
 
         """
-        
+
         # Earth rotation axis in ITRS
         earthRotAxisITRS = np.array([0,0,1])
         #  GCRF to ITRS transformation
@@ -1924,13 +2161,13 @@ class MRSmission():
         # Earth rotation axis in GCRF
         earthRotAxisGCRF = np.linalg.inv(R).dot(earthRotAxisITRS)
         # relative velocity
-        ECEFvel = y[3:] - np.cross(EARTH_ROT_SPEED * earthRotAxisGCRF, y[:3]) 
-        
+        ECEFvel = y[3:] - np.cross(EARTH_ROT_SPEED * earthRotAxisGCRF, y[:3])
+
         return ECEFvel
-    
+
     def get_atmos(self, JDnow, y):
         """
-        Internal function. 
+        Internal function.
         Returns relevant atmospheric properties.
 
         Parameters
@@ -1952,40 +2189,40 @@ class MRSmission():
             Mach 1 number [1]
 
         """
-        
+
         # get geodetic coordinates (lat [°], lon [°], alt [m]), as needed for NRL MSISE-00
         LLAgeodetic = self.transform_GCRF_LLAgeodetic(JDnow, y[:3])
-        
+
         # fix altitude if negative, otherwise MSISE model returns bad values (neg. temp...)
         if LLAgeodetic[2] < 0:
-            LLAgeodetic[2] = 0 
-        
+            LLAgeodetic[2] = 0
+
         # chose in function of atmospheric function what to do
         if self.atmosModel == 'nrlmsise00':
-           
-            # call nrlmsise00 
-            atmosTRho = msise_model(ts.tdb_jd(JDnow).utc_datetime(), 
-                                    LLAgeodetic[2]/1000, 
-                                    LLAgeodetic[0], 
-                                    LLAgeodetic[1], 
+
+            # call nrlmsise00
+            atmosTRho = msise_model(ts.tdb_jd(JDnow).utc_datetime(),
+                                    LLAgeodetic[2]/1000,
+                                    LLAgeodetic[0],
+                                    LLAgeodetic[1],
                                     self.f107s , self.f107, self.Ap)
             # extract values
             T = atmosTRho[1][1]
             Rho = atmosTRho[0][5] * 1000
             # calculate pressure (T * Rho * R)
-            Pa = T * Rho * R 
+            Pa = T * Rho * R
             # calc sound of speed, i.e. Mach 1
             # https://en.wikipedia.org/wiki/Speed_of_sound
             M1 = 20.05 * np.sqrt(T)
-        
+
         # no valid modell
         else:
             # temperature of Cosmic Microwave Background Radiation
             return 2.73, 0, 0, 33
-               
-        
+
+
         return T, Pa, Rho, M1
-    
+
     def get_OrbElements(self, JDnow, y, GM):
         """
         Internal function. Vectorized.
@@ -1997,7 +2234,7 @@ class MRSmission():
         JDnow : float
             Current Julian Date (TBD)
         y : array of floats
-            State vector in the reference frame of planet 
+            State vector in the reference frame of planet
         GM : float
             gravity constant of planet
 
@@ -2007,118 +2244,118 @@ class MRSmission():
             Various elements, see above URL.
 
         """
-        
+
         if y.ndim==1:
             statepos = y[:3]
             statevel = y[3:]
         else:
             statepos = y[:,:3].T
             statevel = y[:,3:].T
-        
+
         # make Skyfield position and velocity objects
         # https://rhodesmill.org/skyfield/api-units.html#skyfield.units.Distance
         position = Distance(m=statepos)
         velocity = Velocity(km_per_s = statevel/1000)
-        
+
         # make Skyfield time series
         JDvec = ts.tdb_jd(JDnow)
-        
+
         # get orbital elements
         orbElements = OsculatingElements(position, velocity, JDvec, GM/1000**3)
-        
-        return orbElements
-    
 
-    
+        return orbElements
+
+
+
     def get_ENUvec(self, JDnow, y):
         """
-        Internal function. Vectorized. 
-        Calculates local ENU vectors for provided statevec's positions in 
+        Internal function. Vectorized.
+        Calculates local ENU vectors for provided statevec's positions in
         object's frame.
-        Following use of these ENU vectors require data processing in object's 
+        Following use of these ENU vectors require data processing in object's
         frame (e.g. for HA/FPA)
         Assumes round object.
-        
+
         Parameters
         ----------
         JDnow : float
             Current Julian Date (TBD)
         y : array of floats
-            State vector in the reference frame of planet 
-       
+            State vector in the reference frame of planet
+
 
         Returns
         -------
         ENU : 3x3 array of floats
             East, North, Up vectors / rotation matrices in local ref. system
-            
+
         """
-        
+
         # check if single statevec or if list of statevecs
         if y.shape == (6,):
             y = np.expand_dims(y, axis=0)
- 
+
         # get UP vectors
         UP = y[:,:3] * 1.0
         UP /= np.linalg.norm(UP, axis=1)[:,None]
-        
+
         # get EAST vectors
         EAST = np.vstack([-y[:,1],y[:,0],np.zeros(len(y))]).T
         EAST /= np.linalg.norm(EAST, axis=1)[:,None]
-        
+
         # get NORTH vectors
         NORTH = np.cross(UP, EAST)
-        #NORTH /= np.linalg.norm(NORTH, axis=1)[:,None] # finetune length to 1; skipping to save time 
-    
+        #NORTH /= np.linalg.norm(NORTH, axis=1)[:,None] # finetune length to 1; skipping to save time
+
         ENU = np.stack((EAST, NORTH, UP), axis=2) # E, N, U vecs are vertical, horizontal stacking
-    
+
         return ENU
-    
-    
+
+
     def get_ENUvec_Earth(self, JDnow, y):
         """
-        Internal function. Vectorized
-        Calculates ENU vectors of provided statevec positions for Earth, in 
+        Internal function. Vectorized.
+        Calculates ENU vectors of provided statevec positions for Earth, in
         GCRF (and not ITRS!)
-        Following use of these ENU vectors require data processing to be done 
+        Following use of these ENU vectors require data processing to be done
         in GCRF (e.g. for HA/FPA)
-        
+
         Parameters
         ----------
         JDnow : float
             Current Julian Date (TBD)
         y : array of floats
-            State vector in the reference frame of planet 
-       
+            State vector in the reference frame of planet
+
 
         Returns
         -------
         ENU : 3x3 array of floats
             East, North, Up vectors / rotation matrices in GCRF
-            
+
         """
-        
-        
+
+
         # check if single statevec or if list of statevecs
         if y.shape == (6,):
             y = np.expand_dims(y, axis=0)
-        
-        t = ts.tdb_jd(JDnow) 
+
+        t = ts.tdb_jd(JDnow)
         d = Distance(m=y[:,:3].T) # input is nxm, n = 3, m = number of provided statevecs
         p = Geocentric(d.au, t=t) # p is in GCRF
         g = wgs84.geographic_position_of(p) # WGS84 position
-    
+
         NEU = g.rotation_at(t)
         # NEU returns a 3D matrix:
         # axis 0: the three components of the originating system (North, East, Up)
         # axis 1: the m different times (=amount of statevecs provided)
         # axis 2: the n (three) dimensions of the target systemt
-        
+
         # New matrix to bring into right order
         ENU = np.zeros((NEU.shape))
         ENU[0,:,:] = NEU[1,:,:] # first row becomes East
         ENU[1,:,:] = NEU[0,:,:] # seconds row becomes North
-        ENU[2,:,:] = NEU[2,:,:] # last row remains Up 
+        ENU[2,:,:] = NEU[2,:,:] # last row remains Up
 
         # for return value, the matrix is transposed
         # axis 0: the m different times (=amount of statevecs provided)
@@ -2126,67 +2363,67 @@ class MRSmission():
         # axis 2: the three dimensions of the originating system (East, North, Up)
 
         return ENU.T
-    
+
     def get_ENUvec_get_EarthGravity(self, JDnow, y, lmax):
-        """ 
+        """
         Internal function. NOT vectorized
-        Calculates ENU vectors at provided statevec position for Earth in GCRF, 
-        with UP = direction of gravity. 
-        
+        Calculates ENU vectors at provided statevec position for Earth in GCRF,
+        with UP = direction of gravity.
+
         Parameters
         ----------
         JDnow : float
             Current Julian Date (TBD)
         y : array of floats
-            State vector in the reference frame of planet 
+            State vector in the reference frame of planet
         lmax : int
-            Max. amount of degree of spherical harmonics 
+            Max. amount of degree of spherical harmonics
 
         Returns
         -------
         ENU_GCRF : 3x3 array of floats
             Earth, North, Up vectors / rotation matrices in GCRF
-        
+
         """
         # get geocentric position of SC rel. to Earth
         LLAgeocentric = self.transform_GCRF_LLAgeocentric(JDnow, y[:3])
-              
+
         # get spherical acceleration vector
-        dUvalues = pysh.gravmag.MakeGravGridPoint(clmEarth.coeffs, clmEarth.gm, clmEarth.r0, LLAgeocentric[2], LLAgeocentric[0], LLAgeocentric[1], lmax)
-       
+        dUvalues = pysh.gravmag.MakeGravGridPoint(self.clmEarth.coeffs, self.clmEarth.gm, self.clmEarth.r0, LLAgeocentric[2], LLAgeocentric[0], LLAgeocentric[1], lmax)
+
         # calc acceleration in Earth ITRS frame
         aXYZ = self.transform_SPH_CART(LLAgeocentric[0]*DEG2RAD, LLAgeocentric[1]*DEG2RAD, dUvalues[0], -dUvalues[1],dUvalues[2])
-        
+
         # the UP vector is in the opposite direction of the acceleration vector
         UP = -aXYZ * 1.0
         UP /= np.linalg.norm(UP)
-        
+
         # get EAST vector
         EAST = np.array([-UP[1], UP[0], 0])
         EAST /= np.linalg.norm(EAST)
-        
+
         # get NORTH vector
         NORTH = np.cross(UP, EAST)
         NORTH /= np.linalg.norm(NORTH)
-        
+
         # compbine vectors
         ENU = np.vstack((EAST, NORTH, UP)).T
 
         # rotation matrix from GCRF to ITRS
         R = itrs.rotation_at(ts.tdb_jd(JDnow))
-        
+
         # apply rotation (ITRS to GCRF)
-        ENU_GCRF = np.linalg.inv(R).dot(ENU) 
-        
+        ENU_GCRF = np.linalg.inv(R).dot(ENU)
+
         return ENU_GCRF
-    
+
     def get_LVLHframe(self, JDnow, y, planet='Earth'):
-        """ 
+        """
         Internal function.
-        Get local LVLH frame. Not vectorized, single statevecs only. 
+        Get local LVLH frame. Not vectorized, single statevecs only.
         https://ai-solutions.com/_freeflyeruniversityguide/attitude_reference_frames.htm
-        
-        
+
+
         Parameters
         ----------
         JDnow : float
@@ -2200,34 +2437,34 @@ class MRSmission():
         -------
         LVLH : 3x3 array of floats
             LVLH rotation matrix (LVLH to GCRF)
-            
-            
+
+
         """
-        
+
         # get pos/vel in function of central object
         if planet=='Earth':
             pos = y[:3]
             vel = y[3:]
         elif planet=='Moon':
-            _, pos, _, _, vel, _, _, _ = self.transform_GCRF_MoonLLAgeocentric(JDnow, y)
-        
+            _, _, _, _, _, _, pos, vel = self.transform_GCRF_MoonLLAplanetocentric(JDnow, y)
+
         # z value (towards planet)
         LVLH_z = -pos/np.linalg.norm(pos)
-        
+
         # y value (normal to orbital plane)
         LVLH_y = np.cross(LVLH_z, vel)
         LVLH_y /= np.linalg.norm(LVLH_y)
-        
+
         # x value (y x z)
         LVLH_x = np.cross(LVLH_y, LVLH_z)
         LVLH_x /= np.linalg.norm(LVLH_x)
-        
+
         # assemble rotation matrix
         LVLH = np.vstack((LVLH_x,LVLH_y,LVLH_z)).T
-        
+
         return LVLH
-        
-     
+
+
     def apply_deltaV_LVLH(self, JDnow, y, deltaV, planet='Earth'):
         """
         Internal function.
@@ -2251,27 +2488,27 @@ class MRSmission():
             Updated state vector in GCRF
 
         """
-        
+
         # get local LVLH frame
         LVLH = self.get_LVLHframe(JDnow, y, planet)
-        
+
         # get velocity in LVLH frame and apply deltaV (described in LVLH)
         velLVLH = LVLH.T.dot(y[3:]) + deltaV
-        
+
         # transform back into original frame and return statevec
         return np.hstack([y[:3], LVLH.dot(velLVLH)])
-    
-        
-    def get_VNBframe(self, JDnow, y, planet='Earth'): 
-        """ 
+
+
+    def get_VNBframe(self, JDnow, y, planet='Earth'):
+        """
         Internal function.
-        Get local VNB frame. Not vectorized, single statevecs only. 
+        Get local VNB frame. Not vectorized, single statevecs only.
         https://ai-solutions.com/_freeflyeruniversityguide/attitude_reference_frames.htm
         Works for:
             - GCRF (Earth)
             - Earth-fixed
             - Moon-fixed
-            
+
         Parameters
         ----------
         JDnow : float
@@ -2288,40 +2525,40 @@ class MRSmission():
         -------
         VNB : 3x3 array of floats
             VNB rotation matrix (VNB to GCRF).
-        
+
         """
-        
+
         # get pos/vel in function of central object
         if planet=='Earth':
             pos = y[:3]
             vel = y[3:]
         elif planet=='EarthFixed':
-            # get GCRF position 
+            # get GCRF position
             pos = y[:3]
-            
+
             # relative velocity
             vel = self.get_relVelocityEarth(JDnow, y)
-            
+
         elif planet=='Moon':
-            _, pos, _, _, vel, _, _, _ = self.transform_GCRF_MoonLLAgeocentric(JDnow, y)
-            
-            
+            _, _, _, _, _, _, pos, vel = self.transform_GCRF_MoonLLAplanetocentric(JDnow, y)
+
+
         # x value (equals velocity vector direction)
         VNB_x = vel/np.linalg.norm(vel)
-        
+
         # y value (normal to orbital plane)
         VNB_y = np.cross(pos, vel)
         VNB_y /= np.linalg.norm(VNB_y)
-        
+
         # z value (x x y)
         VNB_z = np.cross(VNB_x, VNB_y)
         VNB_z /= np.linalg.norm(VNB_z)
-        
+
         # assemble rotation matrix
         VNB = np.vstack((VNB_x,VNB_y,VNB_z)).T
-        
+
         return VNB
-        
+
     def apply_deltaV_VNB(self, JDnow, y, deltaV, planet='Earth'):
         """
         Internal function.
@@ -2349,16 +2586,16 @@ class MRSmission():
             Updated state vector in GCRF
 
         """
-        
+
         # get local VNB frame
         VNB = self.get_VNBframe(JDnow, y, planet)
-        
+
         # get velocity in LVLH frame and apply deltaV (described in LVLH)
         velVNB= VNB.T.dot(y[3:]) + deltaV
-        
+
         # transform back into original frame and return statevec
         return np.hstack([y[:3], VNB.dot(velVNB)])
-    
+
     def get_FPAHAVEL_EF(self, JDnow, y):
         """
         Internal function. Vectorized.
@@ -2381,32 +2618,32 @@ class MRSmission():
             Earth-fixed velocity [m/s].
 
         """
-        
+
         # change velocity vectors from inertial to Earth-fixed
-        
+
         # Earth rotation axis in ITRS
         earthRotAxisITRS = np.array([0,0,1])
         #  GCRF to ITRS
         R = itrs.rotation_at(ts.tdb_jd(JDnow))
-        R = np.transpose(R,(2,0,1)) # first dimension is time 
+        R = np.transpose(R,(2,0,1)) # first dimension is time
 
         # Earth rotation axis in GCRF
         earthRotAxisGCRF = np.transpose(R,(0,2,1)).dot(earthRotAxisITRS)
-       
+
         yEF = y * 1.0
         yEF[:,3:] -= np.cross(EARTH_ROT_SPEED * earthRotAxisGCRF, yEF[:,:3])
-        
+
         # get FPA / HA
         FPA, HA = self.get_FPAHA(JDnow, yEF, planet='Earth')
-        
+
         # EF vel
         EFVEL = np.linalg.norm(yEF[:,3:], axis=1)
-    
+
         return FPA, HA, EFVEL
-    
+
     def get_FPAHA(self, JDnow, y, planet='Earth'):
         """
-        Internal function. Vectorized. 
+        Internal function. Vectorized.
         Returns FPA/HA in frame of provided statevectors. In case planet Earth
         is used, FPA/HA are calculated in the true local ENU frame in ITRS.
 
@@ -2427,61 +2664,61 @@ class MRSmission():
             Heading Angle [°] w.r.t. to state vector system / Earth surface
 
         """
-        
+
         # check if single statevec or if list of statevecs
         if y.shape == (6,):
             y = np.expand_dims(y, axis=0)
-        
+
         if planet == 'Earth':
             # get local ENU values for Earth
             ENU = self.get_ENUvec_Earth(JDnow, y)
         else:
             ENU = self.get_ENUvec(JDnow, y)
-        
+
         # calc angle between velocity vec and local UP
         # - calc dot product between UP and velocity
         # - divise by product of their norms to get costheta
         # - adjust to 1/-1 if necessary
         # - calc angle
-        
+
         # calc angle using the formula for vector dot multiplication (A.B = cos(theta)*norm(A)*norm(B))
         # ENU[:,:,2] = UP vectors (last entry in highest dimension, i.e. columns at the very right at all times)
         UPdotV = np.diag(ENU[:,:,2].dot(y[:,3:].T))
         costheta = UPdotV / (np.linalg.norm(ENU[:,:,2], axis=1) * np.linalg.norm(y[:,3:], axis=1))
-        
+
         # sometimes, cos values are out of -1/1; correction needed
         costheta[costheta > 1.] =  1.
         costheta[costheta <-1.] = -1.
-        
+
         # calc flight path angle [rad]
         FPA = np.arcsin(costheta)
-        
-        # projected vector 
+
+        # projected vector
         vProjected = y[:,3:] - np.diag(y[:,3:].dot(ENU[:,:,2].T))[:,None] * ENU[:,:,2]
-        
+
         # save norm of projected vector, needed afterwards
         vProjectedNorm = np.linalg.norm(vProjected,axis=1)
-        
+
         # find where no projected vector exists
         ind0vProjected = vProjectedNorm==0
         # correct when there is no projected vector (set it to NORTH vector)
         vProjected[ind0vProjected] = ENU[ind0vProjected,:,1]
-        
+
         # calc cos of vProjected w.r.t. NORTH
         costheta_north = np.diag(ENU[:,:,1].dot(vProjected.T))[:,None] / (np.linalg.norm(ENU[:,:,1],axis=1)*vProjectedNorm)[:,None]
         # calc cos of vProjected w.r.t. EAST
         costheta_east  = np.diag(ENU[:,:,0].dot(vProjected.T))[:,None] / (np.linalg.norm(ENU[:,:,0],axis=1)*vProjectedNorm)[:,None]
-        
+
         # calculate azimuth angle; 0 angle is the north, 90° is east [rad]
         HA = np.arctan2(costheta_east, costheta_north)
-        
+
         # find negative values
         indNegAzimuth = HA<0
         # correct to positive values
         HA[indNegAzimuth] += 2*np.pi
-        
+
         return FPA, HA
-        
+
 
     def get_RPSpos(self, JDnow, y, updateMissionDF=0):
         """
@@ -2497,19 +2734,19 @@ class MRSmission():
         y : array of floats
             State vector in GCRF
         updateMissionDF : int, optional
-            If set to 1, Moon position/velocity are taken from mission dataframe.  
+            If set to 1, Moon position/velocity are taken from mission dataframe.
             The default is 0.
 
         Returns
         -------
         RPScoord : array of floats
-            RPS position of spacecraft 
+            RPS position of spacecraft
 
         """
-        
+
         # get MoonFrame information if not using MissionDF; assuming JDnow is a single float
         if not updateMissionDF:
-            SatMoonLLA, SatMoonXYZ, MoonPos, MoonVel, SatMoonXYZVel, R, _, _ = self.transform_GCRF_MoonLLAgeocentric(JDnow, y)
+            SatMoonLLA, SatMoonXYZ, MoonPos, MoonVel, SatMoonXYZVel, R, _, _ = self.transform_GCRF_MoonLLAplanetocentric(JDnow, y)
             # expand dimensions, needed for vectorization of later calculations
             MoonPos = np.expand_dims(MoonPos, axis=0)
             MoonVel = np.expand_dims(MoonVel, axis=0)
@@ -2518,47 +2755,100 @@ class MRSmission():
         else:
             MoonPos = self.missionDF[['MoonPosX', 'MoonPosY', 'MoonPosZ']].to_numpy()
             MoonVel = self.missionDF[['MoonVelX', 'MoonVelY', 'MoonVelZ']].to_numpy()
-        
-        # distance Earth-Moon 
+
+        # distance Earth-Moon
         MoonDist = np.linalg.norm(MoonPos, axis=1)
-        
+
         # length (norm) of velocity of Moon
         MoonVelValue = np.linalg.norm(MoonVel, axis=1)
-        
+
         # normalized spacecraft position w.r.t. Earth-Moon distance
         r_SC = y[:,:3] / MoonDist[:,None]
         # normalized Moon position w.r.t. Earth-Moon distance (r vector)
         MoonPosNorm = MoonPos / MoonDist[:,None]
         # normalized Moon velocity w.r.t.
         MoonVelNorm = MoonVel / MoonVelValue[:,None]
-        
+
         # normal to ecliptic plane
-        h = np.cross(MoonPosNorm, MoonVelNorm) 
-        
+        h = np.cross(MoonPosNorm, MoonVelNorm)
+
         # velocity vector normal to r/h-plane
         v = np.cross(h, MoonPosNorm)
         # get its length (norm)
         vValue = np.linalg.norm(v, axis=1)
         # normalize velocity vector normal to r/h-plane
         vNorm = v / vValue[:,None]
-        
+
         # rotation matrix
-        R = np.stack((MoonPosNorm, vNorm, h), axis=2) # vertical stacking 
-        
+        R = np.stack((MoonPosNorm, vNorm, h), axis=2) # vertical stacking
+
         # memory for new coordinates
         RPScoord = np.zeros((R.shape[0],3))
-        
+
         # rotate SC position (normalized w.r.t. to Earth-Moon distance) into RPS frame
         for i in range(R.shape[0]):
             RPScoord[i,:] = R[i,:,:].T.dot(r_SC[i,:])
-        
+
         return RPScoord
-  
-    
+
+    def transform_J2000SV(self, JDnow, y, targetFrame='GCRF'):
+        """
+        Internal function.
+        Transforms MRS state vector from GCRF to EME2000/FK5.
+
+        Parameters
+        ----------
+        JDnow : float
+            Current Julian Date (TBD).
+        y : array of floats
+            State vector in GCRF or J2000/FK5
+        targetFrame: string
+            Name of frame to transform to: GCRF (J2000 SV) or J2000 (GCRF SV)
+
+        Returns
+        -------
+        yTargetSystem : array of floats
+            State vectors in required target frame
+
+        """
+
+
+        # The IAU Resolutions on Astronomical Reference Systems, Time Scales,
+        # and Earth Rotation Models, 2005, page 28
+        J2000toGCRF = np.array([
+            [ 1.00000000000000, 0.00000007078280, -0.00000008056149],
+            [-0.00000007078280, 1.00000000000000, -0.00000003306041],
+            [ 0.00000008056149, 0.00000003306041,  1.00000000000000]
+            ])
+
+        # check if single statevec or if list of statevecs
+        if y.shape == (6,):
+            y = np.expand_dims(y, axis=0)
+
+        # when going from GCRF to J2000
+        if targetFrame=='GCRF':
+            newPos = J2000toGCRF.dot(y[:,:3].T).T
+            newVel = J2000toGCRF.dot(y[:,3:].T).T
+        # going from J2000 to GCRF
+        elif targetFrame=='J2000':
+            newPos = J2000toGCRF.T.dot(y[:,:3].T).T
+            newVel = J2000toGCRF.T.dot(y[:,3:].T).T
+        # catch error
+        else:
+            print('MRS:\t\tERROR transform_J2000SV(): unknown target frame ', targetFrame)
+            newPos = y[:,:3]
+            newVel = y[:,3:]
+
+        # put position and velocity into one matrix
+        yTargetSystem = np.append(newPos, newVel, axis=1)
+
+        return yTargetSystem
+
+
     def make_TempDF(self, nrows):
         """
         Internal function.
-        Makes a temporary dataframe to be used for propagation results. 
+        Makes a temporary dataframe to be used for propagation results.
 
         Parameters
         ----------
@@ -2570,25 +2860,26 @@ class MRSmission():
         None.
 
         """
-        
+
         # preset column names
         colNames = [
             'JD_TBD',
             'MET',
             'segmentID','segmentType','configID',
             'propaMode', 'forcesID','atmosModel',
+            'activeSC',
             'x','y','z',
             'vx','vy','vz',
             ]
 
         self.TempDF = pd.DataFrame(index = range(nrows), columns=colNames)
-        
+
         # set dtype, because otherwise it's object
         self.TempDF[['JD_TBD','x','y','z','vx','vy','vz']] = self.TempDF[['JD_TBD', 'x','y','z','vx','vy','vz']].astype('float')
-        
-        
+
+
         return None
-    
+
     def add_event(self, JDnow, y, eventType):
         """
         Internal function.
@@ -2608,18 +2899,18 @@ class MRSmission():
         None.
 
         """
-       
-        # pointer to new row in dataframe 
+
+        # pointer to new row in dataframe
         DFpointer = len(self.eventsDF)
-        
+
         # add values to events dataframe
         self.eventsDF.loc[DFpointer, 'JD_TBD'] = JDnow
         self.eventsDF.loc[DFpointer, [ 'x','y','z','vx','vy','vz']] = y.tolist()
         self.eventsDF.loc[DFpointer, 'eventType'] = eventType
-        
+
         return None
-    
-    
+
+
     def expand_DFname(self, typelist, DFname='missionDF'):
         """
         Adds calculated values for the given list of data types to the
@@ -2637,7 +2928,7 @@ class MRSmission():
         None.
 
         """
-        
+
         # different proceedures for different dataframes
         if DFname == 'missionDF':
             self.missionDF = self.expand_DF(typelist, self.missionDF)
@@ -2645,9 +2936,9 @@ class MRSmission():
             self.eventsDF = self.expand_DF(typelist, self.eventsDF)
         else:
             print('MRS:\t\tERROR expand_DF_new(): unknown kind of dataframe ', DFname)
-            
+
         return None
-    
+
     def expand_DF(self, typelist, DF):
         """
         Internal function.
@@ -2658,81 +2949,82 @@ class MRSmission():
         ----------
         typelist : array of strings
             List of data types to be added to the an existing dataframe
-        DF : pandas dataframe. 
+        DF : pandas dataframe.
             Dataframe to be expanded.
 
         Returns
         -------
         DF : pandas dataframe
-            Dataframe with some new values 
+            Dataframe with some new values
 
         """
-        
+
         # setup
         lenDF = len(DF)
         JDs = np.squeeze(DF[['JD_TBD']].to_numpy())
         METs = np.squeeze(DF[['MET']].to_numpy())
         statevecs = DF[['x','y','z','vx','vy','vz']].to_numpy()
-        
+
         # loop through provided list of data types
         for datatype in typelist:
-            
+
             # adding Earth LLA
             if datatype == 'EarthLLA':
                 print('MRS:\t\tAdding Earth LLA to dataframe.')
                 DF[['EarthLat', 'EarthLon', 'EarthAlt']] = self.transform_GCRF_LLAgeodetic(JDs, statevecs[:,:3])
-                    
-            # adding atmospheric properties      
+
+            # adding atmospheric properties
             elif datatype == 'EarthAtmos':
                 print('MRS:\t\tAdding Earth atmospheric values to dataframe.')
-                
-                # initial segment pointer 
+
+                # initial segment pointer
                 segmentID = -1
-                
+
                 # preload space weather
                 self.swDF = sw.sw_daily()
-                
+
                 # get step wise atmospheric values
                 for i in range(lenDF):
-                    
+
                     # detect new segment and update atmospheric values
                     if DF.segmentID[i]>segmentID:
                         segmentID = DF.segmentID[i]
-                        
+
                         # load parameters for given atmosphere
                         self.atmosModel= DF.atmosModel[i]
-                        
+
                         # check if spaceweather needs to be loaded
                         if self.atmosModel == 'nrlmsise00':
                             # use F107 values for time at mission start (dirty, different values than in simulation)
                             datestring = ts.tdb_jd(JDs[i]).utc_strftime(format='%Y-%m-%d')
-                            
-                            # save values 
-                            indices = self.swDF.loc[datestring]
-                            self.f107s = indices['f107_81lst_adj']
-                            self.f107  = indices['f107_adj']
-                            self.Ap    = indices['Apavg'] 
-                    
+
+                            # save values if space weather in use
+                            if self.use_spaceweather:
+                                indices = self.swDF.loc[datestring]
+                                self.f107s = indices['f107_81lst_adj']
+                                self.f107  = indices['f107_adj']
+                                self.Ap    = indices['Apavg']
+
                     # get and add atmospheric values to dataframe
                     DF.loc[i,['atmosT', 'atmosPa', 'atmosRho', 'atmosM1']] = \
                         self.get_atmos(JDs[i], statevecs[i])
-                    
-                
+
+
             # Earth acceleration
             elif datatype == 'EarthAcceleration':
-                # initial segment pointer 
+                # initial segment pointer
                 forcesID = -1
-                
+
                 # get step wise atmospheric values
                 for i in range(lenDF):
-                    
+
                     # detect new segment and update atmospheric values
                     if DF.forcesID[i]>forcesID:
                         forcesID = DF.forcesID[i]
-                        
+
                         # get lmax
                         lmax = self.MD.forcesSettings.EarthSHn[forcesID]
-                        
+
                     # call function if SH number is provided
                     if lmax:
                         objectAcc = self.get_EarthGravity(JDs[i], statevecs[i,:3], lmax)
@@ -2740,29 +3032,29 @@ class MRSmission():
                     else:
                         r_norm = np.linalg.norm(statevecs[i,:3])
                         objectAcc = - GM * statevecs[i,:3]/r_norm**3
-                        
-                
+
+
                     DF.loc[i,['EarthAccX','EarthAccY','EarthAccZ']] = objectAcc
-                
-                
-            
+
+
+
             # EF velocity/HA/FPA
             elif datatype == 'EarthFixedFPAHAvel':
                 print('MRS:\t\tAdding FPA/HA/VEL (w.r.t. to Earth surface) to dataframe.')
                 FPA, HA, EFVEL = self. get_FPAHAVEL_EF(JDs, statevecs)
                 DF['EarthFixedFPA'] = FPA * RAD2DEG
                 DF['EarthFixedHA']  = HA * RAD2DEG
-                DF['EarthFixedVEL'] = EFVEL        
-            
+                DF['EarthFixedVEL'] = EFVEL
+
             # dyn. pressure
             elif datatype == 'dynPress':
-                
+
                 if not 'EarthFixedVEL' in DF.columns:
-                    DF = self.expand_DF(['EarthFixedFPAHAvel'], DF) 
-                
+                    DF = self.expand_DF(['EarthFixedFPAHAvel'], DF)
+
                 print('MRS:\t\tAdding Earth atmospheric dynamic pressure to dataframe.')
                 DF['dynPress'] = .5 * DF['EarthFixedVEL']**2 * DF['atmosRho']
-            
+
             # mach
             elif datatype == 'Mach':
                 print('MRS:\t\tAdding Mach number to dataframe.')
@@ -2773,57 +3065,57 @@ class MRSmission():
                     print('MRS:\t\tERROR: EarthAtmos needs to be added first; skipping Mach.')
                     continue
                 DF['Mach'] = DF['EarthFixedVEL'].to_numpy() / DF['atmosM1'].to_numpy()
-            
+
             # static spacecraft properties
             elif datatype == 'SpacecraftStatic':
-                
+
                 if self.missionDFtype == 2:
                     print('MRS:\t\tERROR: External mission has no spacecraft; skipping Spacecraft data.')
                     continue
-                
+
                 print('MRS:\t\tAdding static spacecraft values to dataframe.')
-                
+
                 staticMass, staticDragArea, staticCd, staticCr, staticSRParea = self.SC.get_staticvalues()
-                DF['SC_static_AreaCd'] = staticDragArea * staticCd 
+                DF['SC_static_AreaCd'] = staticDragArea * staticCd
                 DF['SC_static_Mass'] = staticMass
                 DF['SC_static_Cr'] = staticCr
                 DF['SC_static_SRParea'] = staticSRParea
 
-                
-                
+
+
             # static spacecraft properties
             elif datatype == 'SpacecraftActive':
-                
+
                 if self.missionDFtype == 2:
                     print('MRS:\t\tERROR: External mission has no spacecraft; skipping Spacecraft data.')
                     continue
-                
+
                 if self.SC.mode == 'static':
                     print('MRS:\t\tERROR: mission has only static spacecarft; skipping active spacecraft data.')
                     #continue
-                
+
                 print('MRS:\t\tAdding active spacecraft values to dataframe.')
-                
+
                 for i in range(lenDF):
                     SCthrust, SCmass, returnVals = \
                         self.SC.get_ThrustMassOther(DF.MET[i], pa=DF.atmosPa[i], verbose='')
                     DF.loc[i,['SC_active_Thrust', 'SC_active_Mass']] = SCthrust, SCmass
-                
-            # atmospheric drag 
+
+            # atmospheric drag
             elif datatype == 'DragForce':
-                
+
                 if not 'atmosRho' in DF.columns:
                     DF = self.expand_DF(['EarthAtmos'], DF)
-                
+
                 if not 'dynPress' in DF.columns:
                     DF = self.expand_DF(['dynPress'], DF)
-                    
+
                 if not 'SC_static_AreaCd' in DF.columns:
                     DF = self.expand_DF(['SpacecraftStatic'], DF)
-                
+
                 print('MRS:\t\tAdding drag force to dataframe.')
                 for i in range(lenDF):
-                    
+
                     # check if active or static SC
                     if DF.activeSC[i]:
                         DF.loc[i,'DragF'] = self.SC.get_DragF(DF.MET[i],\
@@ -2833,13 +3125,17 @@ class MRSmission():
                     # static
                     else:
                         DF.loc[i,'DragF'] = DF.dynPress[i] * DF.SC_static_AreaCd[i]
-          
-            
+
+
             # Orbital parameters Earth
             elif datatype == 'EarthOrbElements':
-                print('MRS:\t\tAdding Orbital Elements (Earth, true Equator/Equninox of date) to dataframe.')
-                statevecsTrueEq = self.transform_GCRF_TrueEq(JDs, statevecs)
-                EarthOrbElements = self.get_OrbElements(JDs, statevecsTrueEq, self.EARTH_GM)
+                if self.OE_TEME:
+                    print('MRS:\t\tAdding Orbital Elements (Earth, true Equator/Equninox of date) to dataframe.')
+                    statevecsTrueEq = self.transform_GCRF_TrueEq(JDs, statevecs)
+                    EarthOrbElements = self.get_OrbElements(JDs, statevecsTrueEq, self.EARTH_GM)
+                else:
+                    print('MRS:\t\tAdding Orbital Elements (ICRF) to dataframe.')
+                    EarthOrbElements = self.get_OrbElements(JDs, statevecs, self.EARTH_GM)
                 DF['EarthOESMA'] = EarthOrbElements.semi_major_axis.m
                 DF['EarthOEeccentricity'] = EarthOrbElements.eccentricity
                 DF['EarthOERAAN'] = EarthOrbElements.longitude_of_ascending_node.degrees
@@ -2847,21 +3143,21 @@ class MRSmission():
                 DF['EarthOEinclination'] = EarthOrbElements.inclination.degrees
                 DF['EarthOEtrueAnomaly'] = EarthOrbElements.true_anomaly.degrees
                 DF['EarthOEmeanAnomaly'] = EarthOrbElements.mean_anomaly.degrees
-                
+
             elif datatype == 'EarthFPAHAvel':
                 print('MRS:\t\tAdding FPA/HA/VEL (w.r.t. to inertial Earth) to dataframe.')
                 FPA, HA = self.get_FPAHA(JDs, statevecs)
                 DF['EarthFPA'] = FPA * RAD2DEG
                 DF['EarthHA'] = HA * RAD2DEG
                 DF['EarthVEL'] = np.linalg.norm(statevecs[:,3:], axis=1)
-                
-                
+
+
             # SC position in Moon frame
             elif datatype == 'MoonFrame':
                 print('MRS:\t\tAdding Moon positions to dataframe.')
                 for i in range(lenDF):
                     SatMoonLLA, SatMoonXYZ, MoonPos, MoonVel, SatMoonXYZVel, R, SatMoonICRFPos, SatMoonICRFVel \
-                        = self.transform_GCRF_MoonLLAgeocentric(JDs[i], statevecs[i,:], 'ME')
+                        = self.transform_GCRF_MoonLLAplanetocentric(JDs[i], statevecs[i,:], 'ME')
                     DF.loc[i,['MoonLat', 'MoonLon', 'MoonAlt']] = SatMoonLLA
                     DF.loc[i,['MoonX', 'MoonY', 'MoonZ']] = SatMoonXYZ
                     DF.loc[i,['MoonVx', 'MoonVy', 'MoonVz']] = SatMoonXYZVel
@@ -2869,7 +3165,7 @@ class MRSmission():
                     DF.loc[i,['MoonICRFvx', 'MoonICRFvy', 'MoonICRFvz']] = SatMoonICRFVel
                     DF.loc[i,['MoonPosX', 'MoonPosY', 'MoonPosZ']] = MoonPos
                     DF.loc[i,['MoonVelX', 'MoonVelY', 'MoonVelZ']] = MoonVel
-              
+
             # rotating pulsating system with Moon
             elif datatype == 'MoonRPS':
                 print('MRS:\t\tAdding Rotating-Pulsating System positions to dataframe.')
@@ -2881,7 +3177,7 @@ class MRSmission():
                 RPScolumns = ['MoonRPSx', 'MoonRPSy', 'MoonRPSz']
                 # get + write data
                 DF[RPScolumns] = self.get_RPSpos(JDs, statevecs , updateMissionDF=1)
-                
+
             # Orbital parameters around Moon
             elif datatype == 'MoonOrbElements':
                 print('MRS:\t\tAdding Orbital Elements (Moon) to dataframe.')
@@ -2900,8 +3196,8 @@ class MRSmission():
                 DF['MoonOEargPeriapsis'] = MoonOrbElements.argument_of_periapsis.degrees
                 DF['MoonOEinclination'] = MoonOrbElements.inclination.degrees
                 DF['MoonOEtrueAnomaly'] = MoonOrbElements.true_anomaly.degrees
-            
-            
+
+
             elif datatype == 'MoonFPAHAvel':
                 print('MRS:\t\tAdding FPA/HA/VEL (w.r.t. to Moon-frame) to dataframe.')
                 Moonstatevecs = DF[['MoonX', 'MoonY', 'MoonZ','MoonVx', 'MoonVy', 'MoonVz']].to_numpy()
@@ -2909,31 +3205,31 @@ class MRSmission():
                 DF['MoonFPA'] = FPA * RAD2DEG
                 DF['MoonHA'] = HA * RAD2DEG
                 DF['MoonVEL'] = np.linalg.norm(DF[['MoonVelX', 'MoonVelY', 'MoonVelZ' ]].to_numpy()[:,3:], axis=1)
-            
-      
+
+
             elif datatype == 'UTC':
                 print('MRS:\t\tAdding UTC time to dataframe.')
                 DF['UTC'] = ts.tdb_jd(self.missionDF.JD_TBD.to_numpy()).utc_iso()
-                
+
             elif datatype == 'Eclipse':
                 print('MRS:\t\tAdding eclipse information to dataframe.')
-                
+
                 for i in range(lenDF):
                     self.planets = self.MD.forcesSettings.planets[DF.forcesID[i]]
                     DF.loc[i,['ShadowFunction']], DF.loc[i,['SC2SUN_x','SC2SUN_y','SC2SUN_z']], DF.loc[i,['OccultingBodies']] = self.get_sunVisibility(JDs[i], statevecs[i,:3])
-                    
+
             elif datatype == 'SRP':
-                
+
                 if not 'SC_static_Cr' in DF.columns:
                     DF = self.expand_DF(['SpacecraftStatic'], DF)
-                
+
                 if not 'ShadowFunction' in DF.columns:
                     DF = self.expand_DF(['Eclipse'], DF)
-                    
+
                 print('MRS:\t\tAdding SRP force to dataframe.')
-                    
+
                 for i in range(lenDF):
-                    # add SRP only if required in forces settings 
+                    # add SRP only if required in forces settings
                     if self.MD.forcesSettings.SRP[DF.forcesID[i]]:
                         SRPforce = self.get_SRPForce(DF.ShadowFunction[i],\
                                                      DF.SC_static_Cr[i],\
@@ -2942,9 +3238,9 @@ class MRSmission():
                         DF.loc[i,['SRP']] = np.linalg.norm(SRPforce)
                     else:
                         DF.loc[i, ['SRP']] = 0
-                
-                
-        
+
+
+
             elif datatype == 'PlanetPositions':
                 # Make list of Plaents used in Forcesettings, and making sure
                 # that Earth is always first in list (because Earth Data used later on)
@@ -2977,33 +3273,33 @@ class MRSmission():
                         continue
 
             elif datatype == 'CompVNB_Earth':
-                
+
                 if not 'compX' in DF.columns:
                     print('MRS:\t\tERROR: no comparison trajectory loaded; skipping CompVNB_Earth.')
                     continue
-      
-                print('MRS:\t\tAdding VNB pos. rel. to comparison trajectory to DF (Earth orbit.') 
-                
+
+                print('MRS:\t\tAdding VNB pos. rel. to comparison trajectory to DF (Earth orbit.')
+
                 for i in range(lenDF):
-                    
+
                     # get VNB rotation matrix for given time/comparison state vector
                     VNBrot = self.get_VNBframe(JDs[i], \
                                                DF.loc[i,['compX', 'compY', 'compZ',\
                                                          'compVx', 'compVy', 'compVz']].astype('float').to_numpy() )
                     DF.loc[i,['EO_VNBx', 'EO_VNBy', 'EO_VNBz']] = \
                         VNBrot.T.dot(DF.loc[i,['compPosDiffx','compPosDiffy','compPosDiffz']].astype('float').to_numpy() )
-                
-                
+
+
             elif datatype == 'CompVNB_Moon':
-                
+
                 if not 'compX' in DF.columns:
                     print('MRS:\t\tERROR: no comparison trajectory loaded; skipping CompVNB_Moon.')
                     continue
-      
-                print('MRS:\t\tAdding VNB pos. rel. to comparison trajectory to DF (Moon orbit.') 
-                
+
+                print('MRS:\t\tAdding VNB pos. rel. to comparison trajectory to DF (Moon orbit.')
+
                 for i in range(lenDF):
-                    
+
                     # get VNB rotation matrix for given time/comparison state vector
                     VNBrot = self.get_VNBframe(JDs[i], \
                                                DF.loc[i,['compX', 'compY', 'compZ',\
@@ -3011,25 +3307,25 @@ class MRSmission():
                                                planet='Moon')
                     DF.loc[i,['MO_VNBx', 'MO_VNBy', 'MO_VNBz']] = \
                         VNBrot.T.dot(DF.loc[i,['compPosDiffx','compPosDiffy','compPosDiffz']].astype('float').to_numpy() )
-                
-                
-      
-            # unknown kind of data requested    
+
+
+
+            # unknown kind of data requested
             else:
                 print('MRS:\t\tERROR: unknown kind of data type requested: ', datatype)
-        
+
         # clear temporary variables
         self.del_tempVars()
-    
+
         # return modified dataframe
         return DF
 
     def load_externalMission(self, timevec, statevecs, name='extMission', atmosModel='', DEephemeris='DE421'):
         """
-        This function generates a mission dataframe based on provided 
-        state vectors of an external mission. Further processing, e.g. adding 
+        This function generates a mission dataframe based on provided
+        state vectors of an external mission. Further processing, e.g. adding
         atmospheric values is possible.
-        
+
         Parameters
         ----------
         timevec : array of floats
@@ -3047,18 +3343,18 @@ class MRSmission():
 
         """
 
-        
+
         # check sizes
         if timevec.shape[0] != statevecs.shape[0]:
             print('MRS:\t\tError loading comparison DF: times and state vecs do not match.')
-            return 0 
+            return 0
         if statevecs.shape[1] != 6:
             print('MRS:\t\tError loading comparison DF: state vecs incomplete.')
-            return 0 
-        
+            return 0
+
         # check if timevec are UTC strings
         if type(timevec[0]) == str:
-            # make vector of JD_TBD times 
+            # make vector of JD_TBD times
             JDvec = np.zeros(timevec.shape[0])
             # go through all rows
             for i in range(timevec.shape[0] ):
@@ -3066,49 +3362,57 @@ class MRSmission():
                 UTCtime = UTCtime.replace(tzinfo=utc)
                 JDvec[i] = ts.from_datetime(UTCtime).tdb
         # if not, assume it's JD TBD time
-        else: 
+        else:
             JDvec = timevec
-            
+
         # set mission data (MD)
         self.MD.name = name
         print('MRS:\t\tImporting mission '+self.MD.name+'.')
-        
+
         # make empty missionDF
         self.make_TempDF(int(0))
-        self.missionDF = self.TempDF 
-        
+        self.missionDF = self.TempDF
+
         # fill data into tempDF
         self.missionDF['JD_TBD'] = JDvec
         self.missionDF[['x','y','z','vx','vy','vz']] = statevecs
         self.missionDF['atmosModel'] = atmosModel
-        
+
         # set MET values
         self.missionDF['MET'] = (JDvec-JDvec[0]) * 24 * 3600
-        
+
         # set not used values
         self.missionDF[['segmentID', 'segmentType', 'configID', 'propaMode','forcesID']] = 0
-        
+
         # save kind of missionDF (1=MRS sim, 2=external data)
         self.missionDFtype = 2
-        
+
         # load ephemeris
         self.DEephemeris = DEephemeris
         self.load_ephemeris()
-        
+
+        # set t0_JD
+        self.MD.t0_JD = JDvec[0]
+
+        # make a default spacecraft
+        self.SC = MRSstaticSpacecraft()
+
         return None
 
 
     def load_comparisonStateVec(self, timevec, statevecs):
         """
-        This function interpolates the state vectors from an external mission 
+        This function interpolates the state vectors from an external mission
         at the Julian Dates of the existing mission dataframe and and adds
-        the interpolated state vectors to the mission dataframe. 
-        
+        the interpolated state vectors to the mission dataframe.
+
 
         Parameters
         ----------
         timevec : array of floats
-            Julian Dates (TBD) of external mission.
+            Julian Dates (TBD) of external mission. If 0, timevec is assumed
+            to be identical to mission data frame. Equal amount of state vecs
+            is required.
         statevecs : array of flaots
             State vectors of external mission (in [m]/[m/s])
 
@@ -3117,62 +3421,77 @@ class MRSmission():
         None.
 
         """
-        
-        # check sizes
-        if timevec.shape[0] != statevecs.shape[0]:
-            print('MRS:\t\tError loading comparison DF: times and state vecs do not match.')
-            return 0 
-        if statevecs.shape[1] != 6:
-            print('MRS:\t\tError loading comparison DF: state vecs incomplete.')
-            return 0 
-        
-        # check if timevec are UTC strings
-        if type(timevec[0]) == str:
-            # make vector of JD_TBD times 
-            JDvec = np.zeros(timevec.shape[0])
-            # go through all rows
-            for i in range(timevec.shape[0] ):
-                UTCtime = datetime.datetime.fromisoformat(timevec[i])
-                UTCtime = UTCtime.replace(tzinfo=utc)
-                JDvec[i] = ts.from_datetime(UTCtime).tdb
-        # if not, assume it's JD TBD time
-        else: 
-            JDvec = timevec
-         
-        
-        if JDvec[0]>self.missionDF.JD_TBD.iloc[0]:
-            print('MRS:\t\tWARNING: Setting comparison start time to mission start time.')
-            JDvec[0] = self.missionDF.JD_TBD.iloc[0] 
-        
-        if JDvec[-1]<self.missionDF.JD_TBD.iloc[-1]:
-            print('MRS:\t\tWARNING: Setting comparison end time to mission end time.')
-            JDvec[-1] = self.missionDF.JD_TBD.iloc[-1]
-        
-        
-        # set up bspline interpolation
-        comparisonInterpolation = make_interp_spline(JDvec, statevecs, k=7)
-        
-        # get interpolated state vecs and put into dataframe
-        comparisonStateVecs = comparisonInterpolation(self.missionDF['JD_TBD'].to_numpy())
-        self.missionDF[['compX', 'compY', 'compZ', \
-                        'compVx', 'compVy', 'compVz',\
-                        ]] = comparisonStateVecs
-        
+
+        # if timevec is provided, use the timestamps
+        if timevec:
+
+            # check sizes
+            if timevec.shape[0] != statevecs.shape[0]:
+                print('MRS:\t\tError loading comparison DF: times and state vecs do not match.')
+                return 0
+            if statevecs.shape[1] != 6:
+                print('MRS:\t\tError loading comparison DF: state vecs incomplete.')
+                return 0
+
+            # check if timevec are UTC strings
+            if type(timevec[0]) == str:
+                # make vector of JD_TBD times
+                JDvec = np.zeros(timevec.shape[0])
+                # go through all rows
+                for i in range(timevec.shape[0] ):
+                    UTCtime = datetime.datetime.fromisoformat(timevec[i])
+                    UTCtime = UTCtime.replace(tzinfo=utc)
+                    JDvec[i] = ts.from_datetime(UTCtime).tdb
+            # if not, assume it's JD TBD time
+            else:
+                JDvec = timevec
+
+
+            if JDvec[0]>self.missionDF.JD_TBD.iloc[0]:
+                print('MRS:\t\tWARNING: Setting comparison start time to mission start time.')
+                JDvec[0] = self.missionDF.JD_TBD.iloc[0]
+
+            if JDvec[-1]<self.missionDF.JD_TBD.iloc[-1]:
+                print('MRS:\t\tWARNING: Setting comparison end time to mission end time.')
+                JDvec[-1] = self.missionDF.JD_TBD.iloc[-1]
+
+
+            # set up bspline interpolation
+            comparisonInterpolation = make_interp_spline(JDvec, statevecs, k=7)
+
+            # get interpolated state vecs and put into dataframe
+            comparisonStateVecs = comparisonInterpolation(self.missionDF['JD_TBD'].to_numpy())
+            self.missionDF[['compX', 'compY', 'compZ', \
+                            'compVx', 'compVy', 'compVz',\
+                            ]] = comparisonStateVecs
+
+        # no timevec provided; assumed to be identical to MRS data frame
+        else:
+            # check size
+            if statevecs.shape[0] != len(self.missionDF):
+                print('MRS:\t\tError loading comparison DF: state vecs no same length as DF.')
+                return 0
+
+            # copy statevecs
+            self.missionDF[['compX', 'compY', 'compZ', \
+                            'compVx', 'compVy', 'compVz',\
+                            ]] = statevecs
+
         # calc error between state vectors (position)
         diffXYZ = self.missionDF[['x','y','z']].to_numpy() - self.missionDF[['compX','compY','compZ']].to_numpy()
         self.missionDF[['compPosDiffx','compPosDiffy','compPosDiffz']] = diffXYZ
         self.missionDF['compPosDiff'] = np.linalg.norm(diffXYZ, axis=1)
-        
+
         # calc error between state vectors (velocity)
         diffVelXYZ = self.missionDF[['vx','vy','vz']].to_numpy() - self.missionDF[['compVx','compVy','compVz']].to_numpy()
-        self.missionDF[['compVelDiffx','comppVelDiffy','compVelDiffz']] = diffVelXYZ
+        self.missionDF[['compVelDiffx','compVelDiffy','compVelDiffz']] = diffVelXYZ
         self.missionDF['compVelDiff'] = np.linalg.norm(diffVelXYZ, axis=1)
-        
-        
+
+
         print('MRS:\t\tSuccessfully imported comparison data.')
-        
+
         return None
-    
+
     def loadDataframes(self, missionDFfile='', eventsDFfile=''):
         """
         Loads external csv files to missionDF and eventsDF.
@@ -3189,26 +3508,28 @@ class MRSmission():
         None.
 
         """
-        
+
         if missionDFfile:
             print('MRS:\t\tLoading missionDF from ', missionDFfile)
             self.missionDF = pd.read_csv(missionDFfile, sep=',')
-            
+
         if eventsDFfile:
             print('MRS:\t\tLoading eventsDF from ', eventsDFfile)
             self.eventsDF = pd.read_csv(missionDFfile, sep=',')
-            
+
         return None
-    
-    def exportDataframes(self, folder='./', missionDFonly=0):
+
+    def exportDataframes(self, folder='./', usetimestamp=0, missionDFonly=0):
         """
         Saves the dataframes (mission & events) as csv files.
 
         Parameters
         ----------
         folder : string
-            Relative path to folder where to save the files 
-        missionDFonly : int (0/1)
+            Relative path to folder where to save the files
+        usetimestamp: int (0/1); default 0
+            Wether to use a timestamp in the filename (1) or not (0)
+        missionDFonly : int (0/1); default 0
             Whether to save only the missionDF (1) file or both (0)
 
         Returns
@@ -3216,42 +3537,47 @@ class MRSmission():
         None.
 
         """
-        
-        # get current date/time as string 
+
+        # get current date/time as string
         timestamp = datetime.datetime.now().strftime("%Y.%m.%d-%H.%M.%S")
-        
+
         # prepare filename
-        filename = folder + timestamp +' '+ self.MD.name
-        
+        if usetimestamp:
+            filename = folder + timestamp +' '+ self.MD.name
+        else:
+            filename = folder + self.MD.name
+
         if hasattr(self, 'missionDF'):
-            filenameMission = filename +' missionDF.csv'
+            filenameMission = filename +'_missionDF.csv'
             print('MRS:\t\tSaving missionDF to ', filenameMission)
-            
+
             # https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_csv.html
-            self.missionDF.to_csv(filenameMission, 
+            self.missionDF.to_csv(filenameMission,
                                   index=False,
                                   sep=','
-                                  ) 
+                                  )
         else:
             print('MRS:\t\tWARNING: no missionDF available for csv-export.')
-                  
-                  
+
+
         if hasattr(self, 'eventsDF') and not missionDFonly:
-            filenameEvents = filename +' eventsDF.csv'
+            filenameEvents = filename +'_eventsDF.csv'
             print('MRS:\t\tSaving eventsDF to ', filenameEvents)
-            
+
             # https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_csv.html
-            self.eventsDF.to_csv(filenameEvents, 
+            self.eventsDF.to_csv(filenameEvents,
                                   index=False,
                                   sep=','
-                                  ) 
+                                  )
+        elif not hasattr(self, 'eventsDF') and not missionDFonly:
+            print('MRS:\t\tWARNING: no eventsDF available for csv-export.')
         else:
-            print('MRS:\t\tWARNING: no eventsDF available for csv-export.')  
-            
-        
+            pass
+
+
         return None
-    
-    
+
+
     def return_StateVec(self):
         """
         Returns state vectors saved in mission dataframe
@@ -3264,13 +3590,13 @@ class MRSmission():
             State vectors in GCRF.
 
         """
-        
+
         # get timevec values
         JDs = self.missionDF.JD_TBD.to_numpy()
-        
+
         # get statevec values
         statevecs = self.missionDF[['x', 'y', 'z', 'vx', 'vy', 'vz']].to_numpy()
-        
+
         return JDs, statevecs
 
     def return_comparisonStateVec(self):
@@ -3285,14 +3611,14 @@ class MRSmission():
             State vectors in GCRF.
 
         """
-        # 
-        
+        #
+
         # get timevec values
         JDs = self.missionDF.JD_TBD.to_numpy()
-        
+
         # get statevec values
         statevecs = self.missionDF[['compX', 'compY', 'compZ', 'compVx', 'compVy', 'compVz']].to_numpy()
-        
+
         return JDs, statevecs
 
     def get_EventsList(self, eventNames=[]):
@@ -3310,44 +3636,44 @@ class MRSmission():
         None.
 
         """
-        
-        # TODO: potential events
+
+        # Potential events
         # - Mach1
         # - MaxQ
         # - closest point to Moon
         # - enters EI
-        # - SC crashes on Earth 
-        # - Rocket Staging 
-        
-        # loop through provided array of event names 
+        # - SC crashes on Earth
+        # - Rocket Staging
+
+        # loop through provided array of event names
         for eventType in eventNames:
-            
+
             # skip if eventType already present in eventsDF
             if eventType in self.eventsDF.eventType.to_numpy():
                 continue
-            
+
             # get JD time for given eventType
             if eventType == 'Closest2Earth':
-                
+
                 if not 'EarthAlt' in self.missionDF.columns:
                     DF = self.expand_DFname(['EarthLLA'])
-                
+
                 JDevent = self.find_EventTime(0,'min','EarthAlt', eventType)
-                
+
             elif eventtype == 'FartestFromEarth':
-                
+
                 if not 'EarthAlt' in self.missionDF.columns:
                     DF = self.expand_DFname(['EarthLLA'])
-                    
+
                 JDevent = find_EventTime(0,'max','EarthAlt', eventType)
-                
+
             else:
                 print('MRS:\t\tERROR in get_EventList(): unknown kind of event type requested: ', eventtype)
-         
+
             # in case the event was found, add it to eventsDF
             if JDevent:
-                self.add_event(JDevent, np.zeros(6), eventType)   
-         
+                self.add_event(JDevent, np.zeros(6), eventType)
+
         # add MET values; round due to resolution of JD values
         self.eventsDF['MET'] = round((self.eventsDF['JD_TBD'] - self.MD.t0_JD) / SEC2DAYS, 4)
 
@@ -3357,41 +3683,41 @@ class MRSmission():
             self.MD.missionEvents['JD_TBD'] = self.MD.t0_JD + (self.MD.missionEvents.MET - self.MD.t0_MET) * SEC2DAYS
             # append to eventsDF
             self.eventsDF = self.eventsDF.append(self.MD.missionEvents[['MET','JD_TBD','eventType']], ignore_index=True)
-        
+
         # get spacecraft events
         SCevents = self.SC.get_EventsList()
         # add JD to spacecraft events
         SCevents['JD_TBD'] = self.MD.t0_JD + (SCevents.MET - self.MD.t0_MET) * SEC2DAYS
         # add to eventsDF
         self.eventsDF = self.eventsDF.append(SCevents, ignore_index=True)
-        
+
         # sort event list by JD
         self.eventsDF = self.eventsDF.sort_values(by=['JD_TBD']).reset_index(drop=True)
-    
-        # prepare interpolation of state vectors 
+
+        # prepare interpolation of state vectors
         SVInterp = make_interp_spline(self.missionDF.JD_TBD.to_numpy(), \
                                             self.missionDF.loc[:,['x','y','z','vx','vy','vz']].to_numpy(), k=7)
-    
+
         # names of colums to copy their value from missionDF
         colNames = ['segmentID', 'segmentType', 'configID', 'propaMode','forcesID', 'atmosModel']
-        
+
         # add additional values to eventsDF
         for i in range(len(self.eventsDF)):
-            
+
             # check if statevector is NOT provided (by adding x,y,z-values and comparing to 0)
             if not np.sum(self.eventsDF.loc[i,['x','y','z']]):
                 # interpolate state vector values based on provided JD_TBD value
                 self.eventsDF.loc[i,['x','y','z','vx','vy','vz']] = SVInterp(self.eventsDF.JD_TBD[i]).tolist()
-                
-            # get pointer to the closest missionDF entry ahead of event    
+
+            # get pointer to the closest missionDF entry ahead of event
             missionDFpointer = ((self.eventsDF.JD_TBD[i] - self.missionDF.JD_TBD.to_numpy())>=0).nonzero()[0][-1]
-    
+
             # add values to eventsDF (needed to expand the DF later on)
             self.eventsDF.loc[i, colNames] = self.missionDF.loc[missionDFpointer, colNames]
 
-    
-        
-        
+
+
+
     def find_EventTime(self, value, eventMode, DFcolumn, eventType):
         """
         Internal function.
@@ -3418,14 +3744,14 @@ class MRSmission():
         Returns
         -------
         JDevent : float
-            Julian Date (TBD) of event occurence 
+            Julian Date (TBD) of event occurence
 
         """
         # gets DF for events
-        
+
         # prepare variables
         JDevent = 0
-        
+
         if eventMode == 'max' or eventMode == 'min' :
             # find index of max value
             if eventMode == 'max':
@@ -3433,106 +3759,106 @@ class MRSmission():
             # find index of min value
             else:
                 DFpointer = self.missionDF.loc[:,DFcolumn].idxmin()
-            
+
             # check if pointer is first or last value of missionDF, return that JD value
             if DFpointer == 0 or DFpointer == len(self.missionDF)-1:
                 # return valid JD value
                 return self.missionDF.loc[DFpointer,'JD_TBD']
-                
+
             # find offset of interpolated peak rel. to max value
             offset = self.get_QuadraticPeakInterpolation(self.missionDF.loc[DFpointer-1:DFpointer+1,'EarthAlt'].to_numpy())
-            
+
             # get JD-differences to entry before (pre) and after (post)
             deltaJDpre = self.missionDF.loc[DFpointer,'JD_TBD'] - self.missionDF.loc[DFpointer-1,'JD_TBD']
             deltaJDpost= self.missionDF.loc[DFpointer+1,'JD_TBD'] - self.missionDF.loc[DFpointer,'JD_TBD']
-            
+
             # if difference is bigger than 1%, two segments with different timestamps --> offset value not valid
             if np.abs(deltaJDpost-deltaJDpre)/deltaJDpre > 0.01:
                 print('MRS:\t\tWARNING in find_EventLTime(): non-continous JD values for inpterpolation of: ', eventType)
                 # return 0 (=event not found)
                 return 0
-            
+
             # calc new JD value for interpolated peak
             JDevent = self.missionDF.loc[DFpointer,'JD_TBD'] + offset * deltaJDpre
-  
-            
+
+
         elif eventMode == 'above':
             # finds first occurence where a DFcolumn is above given value
-            
+
             # get array of index when required value was passed
             arrayValuesAbove = ((self.missionDF.loc[:,DFcolumn].to_numpy())-value>=0).nonzero()[0]
-            
+
             # check that at least one index value is available; return 0 if not
             if not arrayValuesAbove.shape[0]:
                 return 0
-            
+
             # get first occurence
             missionDFpointer = arrayValuesAbove[0]
-            
-            # check if pointer is first value of missionDF; 
+
+            # check if pointer is first value of missionDF;
             # if this is the case, return 0 (because no gradient can be calculated)
             if missionDFpointer == 0:
                 return 0
-            
+
             # calc gradient between DFpointer-value and the one before
             valueGradient = (self.missionDF.loc[missionDFpointer,  DFcolumn]-   \
                              self.missionDF.loc[missionDFpointer-1,DFcolumn]) / \
                             (self.missionDF.loc[missionDFpointer,  'JD_TBD']-   \
                              self.missionDF.loc[missionDFpointer-1,'JD_TBD'])
-            
+
             # calc JD time delta rel. to value before passing the given value
             JDdelta = (value - self.missionDF.loc[missionDFpointer-1,DFcolumn])/valueGradient
-            
+
             # linearly interpolated JD value for eent
             JDevent = self.missionDF.loc[missionDFpointer-1,'JD_TBD'] + JDdelta
-            
-            
+
+
         elif eventMode == 'below':
             # finds last occurence where a DFcolumn is right below given value
-            
+
             # get array of index when required value is above threshold-values
             arrayValuesAbove = ((self.missionDF.loc[:,DFcolumn].to_numpy()-value)>=0).nonzero()[0]
-            
+
             # check that at least one index value is available; return 0 if not
             if not arrayValuesAbove.shape[0]:
                 return 0
-            
+
             # get last occurence
             missionDFpointer = arrayValuesAbove[-1]
-            
-            # check if pointer is last value of missionDF; 
-            # if this is the case, return 0 (because no gradient can be calculated, 
+
+            # check if pointer is last value of missionDF;
+            # if this is the case, return 0 (because no gradient can be calculated,
             # as there is no following value)
             if missionDFpointer == len(self.missionDF)-1 :
                 return 0
-            
+
             # calc gradient between DFpointer-value and the one before
             valueGradient = (self.missionDF.loc[missionDFpointer+1,  DFcolumn]-     \
                              self.missionDF.loc[missionDFpointer,DFcolumn]) / \
                             (self.missionDF.loc[missionDFpointer+1,  'JD_TBD']-     \
                              self.missionDF.loc[missionDFpointer,'JD_TBD'])
-            
+
             # calc JD time delta rel. to value before passing the given value
             JDdelta = (value - self.missionDF.loc[missionDFpointer,DFcolumn])/valueGradient
-            
+
             # linearly interpolated JD value for eent
             JDevent = self.missionDF.loc[missionDFpointer,'JD_TBD'] + JDdelta
 
-        
+
         else:
             print('MRS:\t\tERROR in find_EventLTimeLinear(): unknown kind of event mode requested:', eventMode)
-            
-    
+
+
         return JDevent
 
-   
+
     def get_QuadraticPeakInterpolation(self, magnitude):
         """
         Returns the position of an interpolated peak for a curve described by
         three points.
         Reference:
         https://ccrma.stanford.edu/~jos/sasp/Quadratic_Interpolation_Spectral_Peaks.html
-        
+
 
         Parameters
         ----------
@@ -3549,10 +3875,9 @@ class MRSmission():
 
         peakPosition = 1/2 * (magnitude[0] - magnitude[2]) / \
                        (magnitude[0] - 2*magnitude[1] + magnitude[2])
-        
+
         return peakPosition
-        
-        
-        
-        
-        
+
+
+
+

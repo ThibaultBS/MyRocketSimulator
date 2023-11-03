@@ -9,7 +9,7 @@ license = {file = "LICENSE.txt"}
 authors = [
   { name="Thibault Bautze-Scherff", email="thibault@bautze-scherff.de" },
 ]
-description = "The MyRocketSimulator tool allows to simulate complex rocket missions."
+description = "The MyRocketSimulator library allows to simulate complex rocket missions."
 readme = "README.md"
 requires-python = ">=3.7"
 classifiers = [
@@ -25,3 +25,4 @@ dependencies = [
 
 [tool.setuptools]
 include-package-data = true
+packages = ["myrocketsimulator"]
