@@ -37,24 +37,18 @@ The following MRS features are included:
     - load an external MRS mission file
     - adjust mission data 
         - change mission name
-        - modify mission segments (remove delta-v maneuvers)
-        - setup force models:
-            - use spherical harmonics (n,m=35) for earth
-            - use third body gravity (Sun, Moon)
-            - use drag
-            - use SRP
-    - modify internal MRS variables
-        - GM value for Earth (actually nt needed, as SH are used)
-        - do not use space weather, but fixed default flux values
-        - adjust atmospheric density (see Bautze-Scherff, 2023)
+        - modify delta-v maneuvers
+            - change time
+            - change velocity values
     - expand the data frame of the flown mission (here: orbital elements)
-    - import external state vectors for comparison (source: GMAT generated csv)
     - use the MRSviewer
-        - plot difference between simulation and external state vectors positions
-    - direct access to data stored in the data frame (here: orbital elements)
+        - plot orbital elements
+        - 3D plot of trajectory in GCRF
+        - manual saving of figures
+    - export mission data frame as csv-file
         
 
-The execution time is arund XXXX minutes (i7 Quadcore 1.7 GHz). 
+The execution time is arund 12 seconds (i7 Quadcore 1.7 GHz). 
 
 
 """
@@ -89,6 +83,9 @@ CREMEmission.run_mission()
 # add orbital elements (needed for later plot)
 CREMEmission.expand_DFname(['EarthOrbElements'])
 
+# export mission data frame
+CREMEmission.exportDataframes(folder='./MRSoutput/',missionDFonly=True)
+
 # generate viewer object
 CREMEviewer = MRSvislib.MRSviewer(CREMEmission)
 
@@ -99,9 +96,9 @@ figEx3GCRForbit.axes[0].view_init(5,25) # rotate view
 # save plot
 figEx3GCRForbit.savefig('./MRSoutput/MRSexample3_GCRForbit.svg', dpi=600)
 
-
 # show orbital elements
 figEx3OE = CREMEviewer.plot_EarthOE()
 
 # save plot
 figEx3OE.savefig('./MRSoutput/MRSexample3_OE.svg', dpi=600)
+

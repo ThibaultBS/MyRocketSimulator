@@ -19,7 +19,7 @@ class MRSmissionData():
     tend_MET = 0 # MET preliminary end of simulation (!=0 to be used)
  
     # launch settings; mission starts at very first mission segment 
-    launchsite_name = 'KSC LC-39a'
+    launchsite_name = 'no launchsite available'
     launchsite_LLA = np.array([0.,0.,0])  # [deg, geodetic], [deg], [m]
     
 
@@ -48,7 +48,7 @@ class MRSmissionData():
             dragarea = 1622.90 * 0.89 # [m^2]
             Cd = 2.40 
             Cr = 1.8
-            SRParea = 2500  # [m^2] https://www.nasa.gov/mission_pages/station/structure/elements/solar_arrays-about.html
+            SRParea = 2500  # [m^2] 
       
       
     # starts in in first line if launching, otherwise starts in row of t0_MET and uses state vector
