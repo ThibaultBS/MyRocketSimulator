@@ -268,9 +268,8 @@ class MRSmission():
             # load mission
             self.load_mission(missionname, checkmission)
         else:
-            print('MRS:\t\tUsing default flight. Set up state vector manually \
-            or load external state vecs.')
-            self.load_mission('defaultMRSmission', checkmission=False)
+            print('MRS:\t\tUsing default mission.')
+            self.load_mission('defaultMRSmission', checkmission)
 
 
         return None

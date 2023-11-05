@@ -5,7 +5,7 @@ import pandas as pd
 class MRSmissionData():
     
     # Mission settings
-    name = 'Default MRS Mission'
+    name = 'Default MRS Mission Update'
     launchtype = 0 # 0 from starts from state vector, 1 starts from launchsite at first mission segment
     
     # t0_UTC is needed for launchtype 0 (start from state vector) and launchtype 1 (start from launch pad)
@@ -63,15 +63,15 @@ class MRSmissionData():
     
     propaSettings = pd.DataFrame([
                     [0,     '-',      0.1,            0,        10,     'Keeping LLA postion at launchsite'],
-                    [1,     'DOP853',   1,            1,        30,     'LEO, auto-step size, no thrust, DOP853'],
+                    [1,     'DOP853',   1,            0,        60,     'LEO, auto-step size, no thrust, DOP853'],
                     [1,     'DOP853',   60,            0,        30,     'GMAT'],
                     [2,     'DOP853',   60,            1,       1,      '100 ms steps, DOP853']
                     ], 
            columns= ['mode','method','stepsizePropa','forcesID','downsampleLog','comment'])
   
     forcesSettings = pd.DataFrame([
-                    [0,       0,   ['Earth'], 'nrlmsise00',                1, 0, 0,  'GMAT tests'],
-                    [50,       0,   ['Earth', 'Sun', 'Moon'], 'nrlmsise00', 1, 0, 0, 'Earth orbit forces'],
+                    [0,       0,   ['Earth'], '-',                0, 0, 0,  'No perturbating forces'],
+                    [35,      0,   ['Earth', 'Sun', 'Moon'], 'nrlmsise00', 1, 1, 0, 'High fidelity simulation.'],
                     ], 
            columns= ['EarthSHn','MoonSHn','planets','atmosModel','drag','SRP', 'activeSC', 'comment'])
     

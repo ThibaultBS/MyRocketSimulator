@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "myrocketsimulator"
-version = "1.0.1"
+version = "1.0.2"
 license = {file = "LICENSE.txt"}
 authors = [
   { name="Thibault Bautze-Scherff", email="thibault@bautze-scherff.de" },

@@ -21,13 +21,13 @@ class MRSviewer():
     It provides different methods to visualize the results of a flown mission.   
     """
     
-    def __init__(self, missionData):
+    def __init__(self, MRSmissionobject):
         """
         Loads MRSmission object into the MRSviewer object.
 
         Parameters
         ----------
-        missionData : MRSmission object
+        MRSmissionobject : MRSmission object
             An MRSmission object that was execuded (i.e. run_mission()) and 
             contains a filled mission dataframe.
 
@@ -37,10 +37,15 @@ class MRSviewer():
 
         """
         
-        # load mission dataframe
-        print('MRSviewer:\tLoading dataframe of mission '+missionData.MD.name+'.')
-        self.MD = missionData.MD
-        self.missionDF = missionData.missionDF
+        # check if mission data frame exists
+        if hasattr(MRSmissionobject, 'missionDF'):
+            # load mission dataframe
+            print('MRSviewer:\tLoading dataframe of mission '+MRSmissionobject.MD.name+'.')
+            self.MD = MRSmissionobject.MD
+            self.missionDF = MRSmissionobject.missionDF
+            
+        else:
+            print('MRS:\t\tERROR: no mission data frame available.')
         
         return None
         
