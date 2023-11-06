@@ -22,10 +22,10 @@ MRSdemo0mission = MRSlib.MRSmission('defaultMRSmission')
 MRSdemo0mission.run_mission()
 
 # add latitude and longitude data to the data frame 
-#MRSdemo0mission.expand_DFname(['EarthLLA'])
+MRSdemo0mission.expand_DFname(['EarthLLA'])
 
 # make MRSvislib object with the performed mission
-#MRSdemo0viewer = MRSvislib.MRSviewer(MRSdemo0mission)
+MRSdemo0viewer = MRSvislib.MRSviewer(MRSdemo0mission)
 
 # show ground track
-#figGtroundTrack = MRSdemo0viewer.plot_GroundtrackEarth()
+figGtroundTrack = MRSdemo0viewer.plot_GroundtrackEarth()

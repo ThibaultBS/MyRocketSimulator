@@ -54,7 +54,7 @@ MRSdemo0viewer = MRSvislib.MRSviewer(MRSdemo0mission)
 # show ground track
 MRSdemo0viewer.plot_GroundtrackEarth()
 ```
-The output will be:
+The console output will be:
 ```
 MRS:		Using default mission.
 MRS:		Loading mission object 'defaultMRSmission'.
@@ -64,10 +64,16 @@ MRS:		Loading Default MRS spacecraft as static spacecraft.
 MRS:		Mission data valid.
 MRS:		Running mission Default MRS Mission Update.
 MRS:		Processing mission segment 0.
-MRS:		Mission ended. Processing time: 80.276 seconds.
+MRS:		Mission ended. Processing time: 12.652 seconds.
 MRS:		Adding Earth LLA to dataframe.
 MRSviewer:	Loading dataframe of mission Default MRS Mission Update.
 ```
+The ground track will be shown as a figure:
+![GCRF view of satellite with Hohmann transfer to higher altitude](https://raw.githubusercontent.com/ThibaultBS/MyRocketSimulator/main/MRS_examples/MRSoutput/MRSexample0_GroundtrackEarth.png)
+
+
+
+
 
 
 
