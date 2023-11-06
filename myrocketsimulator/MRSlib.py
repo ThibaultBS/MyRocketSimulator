@@ -250,9 +250,9 @@ class MRSmission():
         self.EarthGravModel = 'EGM96' # alternative: EGM2008
         self.EarthGravZonalOnly = 0
         self.DEephemeris = 'DE421' # alternative: DE440
-        self.MoonTides = 0 # experimental
-        self.debugCounter = 0
+        self.MoonTides = 0 # experimental; not fully implemtend yet
         self.OE_TEME = 0 # if 0: OE calculated in ICRF, if 1: OE calc. in TEME
+        self.fastEphemeris = 0 # if set to 1, planet positions will be fixed (fast)
 
         # space weather settings
         self.use_spaceweather = 1
@@ -263,6 +263,7 @@ class MRSmission():
         self.RhoGain = 1.07         # exemplary value; used in Bautze-Scherff, 2023
         self.RhoOffset = 3.0495e-14 # exemplary value; used in Bautze-Scherff, 2023
 
+
         # load mission if one provided
         if missionname != 'defaultMRSmission':
             # load mission
@@ -272,7 +273,56 @@ class MRSmission():
             self.load_mission('defaultMRSmission', checkmission)
 
 
+        # overwrite internal default settings if provided in mission profile
+        self.overwrite_settings()
+
         return None
+    
+    def overwrite_settings(self):
+        """
+        Overwrites internal MRS default settings if provided in missin data.
+
+        Returns
+        -------
+        None.
+
+        """
+        
+        if hasattr(self.MD, 'integrator_atol'):
+            self.integrator_atol = self.MD.integrator_atol 
+        if hasattr(self.MD, 'integrator_rtol'):
+            self.integrator_rtol = self.MD.integrator_rtol 
+        if hasattr(self.MD, 'integrator_max_step'):
+            self.integrator_max_step = self.MD.integrator_max_step 
+        if hasattr(self.MD, 'EarthGravModel'):
+            self.EarthGravModel = self.MD.EarthGravModel 
+        if hasattr(self.MD, 'EarthGravZonalOnly'):
+            self.EarthGravZonalOnly = self.MD.EarthGravZonalOnly 
+        if hasattr(self.MD, 'DEephemeris'):
+            self.DEephemeris = self.MD.DEephemeris 
+        if hasattr(self.MD, 'MoonTides'):
+            self.MoonTides = self.MD.MoonTides 
+        if hasattr(self.MD, 'OE_TEME'):
+            self.OE_TEME = self.MD.OE_TEME 
+        if hasattr(self.MD, 'fastEphemeris'):
+            self.fastEphemeris = self.MD.fastEphemeris 
+        if hasattr(self.MD, 'use_spaceweather'):
+            self.use_spaceweather = self.MD.use_spaceweather 
+        if hasattr(self.MD, 'f107s'):
+            self.f107s = self.MD.f107s 
+        if hasattr(self.MD, 'f107'):
+            self.f107 = self.MD.f107 
+        if hasattr(self.MD, 'Ap'):
+            self.Ap = self.MD.Ap 
+        if hasattr(self.MD, 'transToMSISE90'):
+            self.transToMSISE90 = self.MD.transToMSISE90 
+        if hasattr(self.MD, 'RhoGain'):
+            self.RhoGain = self.MD.RhoGain 
+        if hasattr(self.MD, 'RhoOffset'):
+            self.RhoOffset = self.MD.RhoOffset 
+        
+        
+        
 
     def load_mission(self, missionname, checkmission=True):
         """

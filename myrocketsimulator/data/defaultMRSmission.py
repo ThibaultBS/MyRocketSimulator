@@ -22,6 +22,10 @@ class MRSmissionData():
     launchsite_name = 'no launchsite available'
     launchsite_LLA = np.array([0.,0.,0])  # [deg, geodetic], [deg], [m]
     
+    # overwrite MRS default settings
+    integrator_atol = 1e-5 
+    integrator_rtol = 1e-5
+    integrator_max_step = 60
 
     
     y0 = np.array([
