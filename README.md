@@ -1,5 +1,4 @@
 # Welcome to MyRocketSimulator!
-
 MyRocketSimulator is a Python library for spacecraft orbit propagation around the Earth and missions towards and around the Moon. It provides the simulation environment for
 the author’s plan to replicate the complete trajectory of Apollo 11, from launch to splashdown. Necessary parts for such an undertaking a continuously added to MRS. 
 
@@ -18,7 +17,7 @@ Relevant features of MRS 1.0:
 -	Import of external state vectors for 1:1 trajectory comparison.
 -	Pre-configured visualizations. 
 
-Examplary visualization of flight with two delta-v maneuvers in order to raise the spacecraft's altitude:
+Exemplary visualization of flight with two delta-v maneuvers in order to raise the spacecraft's altitude:
 ![GCRF view of satellite with Hohmann transfer to higher altitude](https://raw.githubusercontent.com/ThibaultBS/MyRocketSimulator/main/MRS_examples/MRSoutput/MRSexample3_GCRForbit.svg)
 
 ## Installation
@@ -32,7 +31,7 @@ The MRS library can be manually downloaded from Gibthub ([Link](https://github.c
 
 `pip install .`
 
-## First simulation
+## Getting started
 After installation, you are ready to start with your first simulation. The following code performs a 24-hour propagation of the ISS, using the included MRS default mission. Please note that Skyfield and spaceweather will require an internet connection to download relevant data, such as ephemeris files.
 
 ```python
@@ -58,18 +57,28 @@ The console output will be:
 ```
 MRS:		Using default mission.
 MRS:		Loading mission object 'defaultMRSmission'.
-MRS:		Mission 'Default MRS Mission' loaded.
+MRS:		Mission 'Default MRS Mission (ISS)' loaded.
 MRS:		Checking mission data validity.
-MRS:		Loading Default MRS spacecraft as static spacecraft.
+MRS:		Loading Default MRS spacecraft (ISS) as static spacecraft.
 MRS:		Mission data valid.
-MRS:		Running mission Default MRS Mission Update.
+MRS:		Running mission Default MRS Mission (ISS).
 MRS:		Processing mission segment 0.
 MRS:		Mission ended. Processing time: 12.652 seconds.
 MRS:		Adding Earth LLA to dataframe.
 MRSviewer:	Loading dataframe of mission Default MRS Mission Update.
 ```
+
 The ground track will be shown as a figure:
 ![GCRF view of satellite with Hohmann transfer to higher altitude](https://raw.githubusercontent.com/ThibaultBS/MyRocketSimulator/main/MRS_examples/MRSoutput/MRSexample0_GroundtrackEarth.png)
+
+## Demo missions
+The github repository contains demo missions that demonstrate different features of MyRocketSimulator. They can be used as template for your own missions.
+- MRSexample0: simple propagation of the ISS (see Getting started)
+- MRSexample1: satellite propagation and GMAT comparison
+- MRSexample2: high accurate propagation with GMAT orbital element comparison
+- MRSexample3: two delta-v maneuvers to perform a Hohmann transfer 
+
+MRS does currently not provide its own help function or further documentation. The demo missions are therefore a helpful resource to understand MRS' capabilities. 
 
 
 

@@ -601,6 +601,9 @@ class MRSviewer():
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         ax.set_title(figtitle)
+        ax.set_xlabel('X [km]',fontsize=12)
+        ax.set_ylabel('Y [km]',fontsize=12)
+        ax.set_zlabel('Z [km]',fontsize=12)
         
         # adjust font sizes
         plt.rcParams.update({'font.size': 12})
