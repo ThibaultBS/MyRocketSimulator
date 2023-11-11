@@ -6,30 +6,6 @@ Created on Sun Jan 15 17:01:25 2023
 @author: Thibault Bautze-Scherff
 """
 
-"""
-
-Short-term wishlist:
-    - Add list of events
-
-Mid-term wishlist:
-    - Implement Rocket
-    - Implement Guidance
-    - 2D optimizer
-    - Show infos about settings and Mission Data
-    - Clean up variables names and MD/SCD names (e.g. configID)
-
-Long-term wishlist:
-    - All objects of solar system (gravity simulation)
-    - Lift-force
-    - Drag/lift in function of AoA
-    - Export simulation report as PDF (settings, plots, event-table, ...)
-    - Multi-Step launch optimizer
-    - External weather for launchsite
-
-
-"""
-
-
 import numpy as np
 import pandas as pd
 import time

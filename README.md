@@ -17,6 +17,11 @@ Relevant features of MRS 1.0:
 -	Import of external state vectors for 1:1 trajectory comparison.
 -	Pre-configured visualizations. 
 
+The typical workflow of MRS has three steps:
+- Define the mission settings, e.g. by writing your own mission file or editing a provided file.
+- Run the propagation.
+- Add required data and export the data frame for further use. 
+
 Exemplary visualization of flight with two delta-v maneuvers in order to raise the spacecraft's altitude:
 ![GCRF view of satellite with Hohmann transfer to higher altitude](https://raw.githubusercontent.com/ThibaultBS/MyRocketSimulator/main/MRS_examples/MRSoutput/MRSexample3_GCRForbit.svg)
 
@@ -76,9 +81,23 @@ The github repository contains demo missions that demonstrate different features
 - MRSexample0: simple propagation of the ISS (see Getting started)
 - MRSexample1: satellite propagation and GMAT comparison
 - MRSexample2: high accurate propagation with GMAT orbital element comparison
-- MRSexample3: two delta-v maneuvers to perform a Hohmann transfer 
+- MRSexample3: two delta-v maneuvers to perform a Hohmann transfer
 
-MRS does currently not provide its own help function or further documentation. The demo missions are therefore a helpful resource to understand MRS' capabilities. 
+Demo missions will be added for later versions of MRS featuring new relevant functions.
+
+## Documentation
+MRS does currently not provide its own help function or further documentation, but can be easily learned by using the following resources:
+- Demo missions.
+- The publication [Spacecraft Orbit Propagation in an Open-Source Python Environment]( https://www.researchgate.net/publication/375293398_Spacecraft_Orbit_Propagation_in_an_Open-Source_Python_Environment) contains a good summary of MRS 1.0/1.1 features. 
+- Read the code of the MRS default mission (myrocketsimulator/data/defaultMRSmission.py).
+- Print the docstrings of all methods used in the demo mission, e.g. through:
+```python
+print(MRSlib.MRSmission.load_mission.__doc__)
+```
+- Read the code of MRSlib's exportDataframes() to learn what data can be added to the data frame.
+- Send your questions to support@myrocketsimulator.com.
+- Follow for updates on X: [www.twitter.com/myrocketsim](https://twitter.com/myrocketsim).
+
 
 
 

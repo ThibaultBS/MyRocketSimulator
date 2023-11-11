@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "myrocketsimulator"
-version = "1.0.2"
+version = "1.0.4"
 license = {file = "LICENSE.txt"}
 authors = [
-  { name="Thibault Bautze-Scherff", email="thibault@bautze-scherff.de" },
+  { name="Thibault Bautze-Scherff", email="admin@myrocketsimulator.com" },
 ]
 description = "MyRocketSimulator allows to simulate complex rocket missions."
 readme = "README.md"
@@ -18,14 +18,14 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "matplotlib",
+    "matplotlib>=3.5.0",
     "skyfield>=1.45",
-    "pandas",
-    "scipy",
-    "spaceweather",
-    "nrlmsise00",
-    "pyshtools",
-    "numpy"
+    "pandas>=1.3.4",
+    "scipy>=1.7.1",
+    "spaceweather>=0.2.2",
+    "nrlmsise00>=0.0.1",
+    "pyshtools>=4.10",
+    "numpy>=1.21.6"
 ]
 
 
