@@ -2,7 +2,7 @@
 MyRocketSimulator is a Python library for spacecraft orbit propagation around the Earth and missions towards and around the Moon. It provides the simulation environment for
 the author’s plan to replicate the complete trajectory of Apollo 11, from launch to splashdown. Necessary parts for such an undertaking a continuously added to MRS. 
 
-The simulator relies on a high-fidelity propagator that includes all relevant perturbating forces, such as drag, SRP, gravity with spherical harmonics and third body gravity. A published in-depth comparison with GMAT proved its accuracy for Earth orbiting spacecrafts. Download the paper [Spacecraft Orbit Propagation in an Open-Source Python Environment]( https://www.researchgate.net/publication/375293398_Spacecraft_Orbit_Propagation_in_an_Open-Source_Python_Environment).
+The simulator relies on a high-fidelity propagator that includes all relevant perturbating forces, such as drag, SRP, gravity with spherical harmonics and third body gravity. A published in-depth comparison with GMAT proved its accuracy for Earth orbiting spacecrafts. Download the paper [Spacecraft Orbit Propagation with the MyRocketSimulator Python Package]( https://www.researchgate.net/publication/375293398_Spacecraft_Orbit_Propagation_with_the_MyRocketSimulator_Python_Package).
 
 An early, non-published release of MRS was used to perform a preliminary flight simulation and analysis of the Moon-bound Artemis I mission. Download the paper [Preliminary Launch Trajectory Simulation for Artemis I with the Space Launch System]( https://www.researchgate.net/publication/362270344_Preliminary_Launch_Trajectory_Simulation_for_Artemis_I_with_the_Space_Launch_System).
 
@@ -68,7 +68,7 @@ MRS:		Loading Default MRS spacecraft (ISS) as static spacecraft.
 MRS:		Mission data valid.
 MRS:		Running mission Default MRS Mission (ISS).
 MRS:		Processing mission segment 0.
-MRS:		Mission ended. Processing time: 12.652 seconds.
+MRS:		Mission ended. Processing time: 1.301 seconds.
 MRS:		Adding Earth LLA to dataframe.
 MRSviewer:	Loading dataframe of mission Default MRS Mission Update.
 ```
@@ -88,7 +88,7 @@ Demo missions will be added for later versions of MRS featuring new relevant fun
 ## Documentation
 MRS does currently not provide its own help function or further documentation, but can be easily learned by using the following resources:
 - Demo missions.
-- The publication [Spacecraft Orbit Propagation in an Open-Source Python Environment]( https://www.researchgate.net/publication/375293398_Spacecraft_Orbit_Propagation_in_an_Open-Source_Python_Environment) contains a good summary of MRS 1.0/1.1 features. 
+- The publication [Spacecraft Orbit Propagation with the MyRocketSimulator Python Package]( https://www.researchgate.net/publication/375293398_Spacecraft_Orbit_Propagation_with_the_MyRocketSimulator_Python_Package) contains a good summary of MRS 1.0/1.1 features. 
 - Read the code of the MRS default mission (myrocketsimulator/data/defaultMRSmission.py).
 - Print the docstrings of all methods used in the demo mission, e.g. through:
 ```python

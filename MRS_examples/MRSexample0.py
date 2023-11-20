@@ -29,3 +29,4 @@ MRSdemo0viewer = MRSvislib.MRSviewer(MRSdemo0mission)
 
 # show ground track
 figGtroundTrack = MRSdemo0viewer.plot_GroundtrackEarth()
+

@@ -43,7 +43,7 @@ EARTH_ROT_SPEED = 7292115.1467e-11 # [rad/s]
 SRP1AU =  4.5344321e-6 #  [N/m^2] solar flux radiation pressure at one AU
 R = 287.052874 # specific gas constant dry air
 
-# Radius values for ecplise calculations
+# Radius values for ecplise + tide calculations
 SUN_RADIUS = 696340e3 # [m]
 EARTH_RADIUS = 6378.1370e3 # [m]
 MOON_RADIUS  = 1737.4e3 # [m]
@@ -226,10 +226,9 @@ class MRSmission():
         self.EarthGravModel = 'EGM96' # alternative: EGM2008
         self.EarthGravZonalOnly = 0
         self.DEephemeris = 'DE421' # alternative: DE440
-        self.MoonTides = 0 # experimental; not fully implemtend yet
         self.OE_TEME = 0 # if 0: OE calculated in ICRF, if 1: OE calc. in TEME
-        self.fastEphemeris = 0 # if set to 1, planet positions will be fixed (fast)
-
+        self.fastEphemeris = 0 # if set to 1, planet positions will be fixed 
+                               
         # space weather settings
         self.use_spaceweather = 1
         self.f107s = 150
@@ -251,6 +250,10 @@ class MRSmission():
 
         # overwrite internal default settings if provided in mission profile
         self.overwrite_settings()
+        
+        # counters; may be removed in later versions
+        self.calls_get_acceleration = 0
+        self.calls_preload_ObjectPosVel = 0
 
         return None
     
@@ -276,8 +279,6 @@ class MRSmission():
             self.EarthGravZonalOnly = self.MD.EarthGravZonalOnly 
         if hasattr(self.MD, 'DEephemeris'):
             self.DEephemeris = self.MD.DEephemeris 
-        if hasattr(self.MD, 'MoonTides'):
-            self.MoonTides = self.MD.MoonTides 
         if hasattr(self.MD, 'OE_TEME'):
             self.OE_TEME = self.MD.OE_TEME 
         if hasattr(self.MD, 'fastEphemeris'):
@@ -380,7 +381,7 @@ class MRSmission():
 
     def check_MD(self):
         """
-        Checks mission data agains errors of all kind (missing, wrong, non
+        Checks mission data against errors of all kind (missing, wrong, non
         logical, ...) and sets up internal variables.
 
 
@@ -474,6 +475,9 @@ class MRSmission():
         else:
             print('MRS:\t\tERROR: no valid Earth gravity model selected.')
             errorfound += 1
+        
+        # back up coefficients
+        self.clmEarth.coeffsOrig = self.clmEarth.coeffs * 1.0
 
         # lood Moon SH
         #clmMoon = pysh.datasets.Moon.GRGM1200B(lmax=lmaxMoon)
@@ -684,6 +688,11 @@ class MRSmission():
                 self.planets   = self.MD.forcesSettings['planets'][self.forcesID]
                 self.EarthSHn  = self.MD.forcesSettings['EarthSHn'][self.forcesID]
                 self.MoonSHn   = self.MD.forcesSettings['MoonSHn'][self.forcesID]
+                self.EarthTides = self.MD.forcesSettings['EarthTides'][self.forcesID]
+                self.MoonTides  = self.MD.forcesSettings['MoonTides'][self.forcesID]
+                
+                # make sure objects are preloaded at least once, if needed
+                self.deactivate_preload_ObjectPosVel = 0
 
                 ###
                 ### MAKE MET (MISSION ELLAPSED TIME) VECTOR
@@ -787,6 +796,11 @@ class MRSmission():
 
                 # make sure to reset the Cnm/Snm for Moon gravity in case
                 # tides are used (may have altered values in previous segment)
+                if self.EarthTides:
+                    self.clmEarth.coeffs = self.clmEarth.coeffsOrig * 1.0
+
+                # make sure to reset the Cnm/Snm for Moon gravity in case
+                # tides are used (may have altered values in previous segment)
                 if self.MoonTides:
                     self.clmMoon.coeffs = self.clmMoon.coeffsOrig * 1.0
 
@@ -847,7 +861,7 @@ class MRSmission():
                 # append segmentDF to missionDF
                 self.missionDF = pd.concat([self.missionDF, self.TempDF], ignore_index=True)
 
-
+                
 
 
             ###
@@ -896,7 +910,7 @@ class MRSmission():
 
         # save kind of missionDF (1=MRS sim, 2=external data)
         self.missionDFtype = 1
-
+    
         return None
 
     def del_tempVars(self):
@@ -1246,13 +1260,31 @@ class MRSmission():
             Acceleration in the GCRF frame.
 
         """
+        
+        # increase call counter
+        self.calls_get_acceleration += 1
 
         # calculate current JD_TBD
         JDnow = self.MD.t0_JD + (MET - self.MD.t0_MET) * SEC2DAYS
 
-        # preload pos/vel of relevant celestial bodies
-        self.preload_ObjectPosVel(JDnow)
-        preloadFlag = 1
+        # prevent preloading of objects if no object positions are needed
+        if (self.planets==['Earth'] or self.planets == []) and \
+            self.EarthTides == 0 and \
+            self.SRPOn == 0:
+                self.deactivate_preload_ObjectPosVel = 1
+
+        # preload pos/vel of relevant celestial bodies 
+        # always happens at first call, even if fastEphemeris is set to 1
+        if not self.deactivate_preload_ObjectPosVel:
+            self.preload_ObjectPosVel(JDnow)
+        
+        # if fastEphemeris are set to 1, then set flag to not reload ephemeris
+        # for this segment
+        if self.fastEphemeris == 1:
+            self.deactivate_preload_ObjectPosVel = 1
+        
+        # set preload flag for all functions
+        preloadFlag = 1 
 
         # get acceleration from planets
         accPlanets = self.get_accPlanets(MET, y, JDnow, preloadedObjects=preloadFlag)
@@ -1342,6 +1374,9 @@ class MRSmission():
         None.
 
         """
+        
+        # count function calls
+        self.calls_preload_ObjectPosVel += 1
 
         # get position & velocity of Earth
         EarthJDnow = self.earth.at(ts.tdb_jd(JDnow))
@@ -1374,11 +1409,21 @@ class MRSmission():
                 print('MRS:\t\tERROR: invalid planet name provided in forcesSettings.')
                 continue
 
+        # check if tides needed
+        if self.EarthTides or self.MoonTides:
+            useTides = 1
+        else:
+            useTides = 0
 
-        # load Sun if needed for SRP
-        if not 'Sun' in self.planets and 1 in self.MD.forcesSettings.SRP.values:
+        # load Sun if needed for SRP or Tides
+        if not 'Sun' in self.planets and (self.SRPOn or useTides):
             objectPos = self.sun.at(ts.tdb_jd(JDnow)).position.m
             self.SunPosGCRF = objectPos - EarthPosICRF
+            
+        # load Moon if needed for tides
+        if not 'Moon' in self.planets and useTides:
+            objectPos = self.moon.at(ts.tdb_jd(JDnow)).position.m
+            self.MoonPosGCRF = objectPos - EarthPosICRF
 
         return None
 
@@ -1497,7 +1542,7 @@ class MRSmission():
                 lmax = self.EarthSHn
                 # get SH-gravity if lmax provided
                 if lmax:
-                    objectAcc = self.get_EarthGravity(JDnow, y[:3], lmax)
+                    objectAcc = self.get_EarthGravity(JDnow, y[:3], lmax, preloadedObjects=preloadedObjects)
                 # if no lmax, use point gravity
                 else:
                     r_norm = np.linalg.norm(SCpos)
@@ -1782,7 +1827,7 @@ class MRSmission():
 
         return y
 
-    def get_EarthGravity(self, JDnow, GCRFpos, lmax):
+    def get_EarthGravity(self, JDnow, GCRFpos, lmax, preloadedObjects=0):
         """
         Internal function.
         Returns the acceleration by the Earth including spherical harmonics.
@@ -1803,6 +1848,15 @@ class MRSmission():
             Accleration by Earth in GCRF frame
 
         """
+
+        if self.EarthTides:
+            # get deltas for Cnm/Snm
+            dCnm, dSnm = self.get_TidesCoeffs(JDnow, 'Earth', preloadedObjects=preloadedObjects)
+            # load original coeffs
+            self.clmEarth.coeffs = self.clmEarth.coeffsOrig * 1.0
+            # apply deltas
+            self.clmEarth.coeffs[0,:4,:4] += dCnm
+            self.clmEarth.coeffs[1,:4,:4] += dSnm
 
         # get geocentric position of SC rel. to Earth
         LLAgeocentric = self.transform_GCRF_LLAgeocentric(JDnow, GCRFpos)
@@ -1888,15 +1942,15 @@ class MRSmission():
             Accleration by Moon in GCRF frame
 
         """
-        # change Cnm/Snm if lunar tides are activated
+
         if self.MoonTides:
             # get deltas for Cnm/Snm
-            dcoeffs = self.get_MoonTidesCoeffs(JDnow, preloadedObjects=preloadedObjects)
+            dCnm, dSnm = self.get_TidesCoeffs(JDnow, 'Moon', preloadedObjects=preloadedObjects)
             # load original coeffs
             self.clmMoon.coeffs = self.clmMoon.coeffsOrig * 1.0
             # apply deltas
-            self.clmMoon.coeffs[:,2,:3] += dcoeffs
-
+            self.clmMoon.coeffs[0,:3,:3] += dCnm
+            self.clmMoon.coeffs[1,:3,:3] += dSnm
 
         # get geocentric position of SC rel. to Moon (LLA and xyz, plus Moon position and rotation matrix)
         LLAgeocentric, MoonFixedPos, MoonPos, MoonVel, SatMoonXYZVel, R, _, _ = \
@@ -1919,89 +1973,131 @@ class MRSmission():
 
         return aXYZ_GCRF
 
-    def get_MoonTidesCoeffs(self, JDnow, preloadedObjects=0):
+    
+    def get_TidesCoeffs(self, JDnow, body, preloadedObjects=0):
         """
-        Internal function.
-        Returns the delta-values for C/S-coefficients of the Moon Gravity
-        spherical harmonics for simulation of solid tides of the Moon.
-
-        Reference: equation 9 on page 7 of
-        "Estimating a High-Resolution Lunar Gravity Field and Time-Varying
-        Core Signature", Ryan S. Park et al., 2011.
-
         Parameters
         ----------
         JDnow : float
             Current Julian Date (TBD)
+        body: string
+            Name of celestial object for which the coefficients are calculated
+            ('Earth' or 'Moon').
         preloadedObjects : int, optional
             Whether to compute the Moon pos/vel while execution (0) or use
             preloaded values (faster).
 
         Returns
         -------
-        dcoeffs : array of floats (2x3)
-            Delta values for C (first row) and S (second row)
-
+        dCnm: array of floats
+            delta values for spherical harmonics (cosine)
+        dSnm: array of floats
+            delta values for spherical harmonics (sine)
         """
 
-        # GCRF position of sun
+        # GCRF position of Sun & Moon
         if preloadedObjects:
             SunPos_GCRF = self.SunPosGCRF
+            MoonPos_GCRF = self.MoonPosGCRF
         else:
+            # ICRF
             EarthPos_ICRF = self.earth.at(ts.tdb_jd(JDnow)).position.m
             SunPos_ICRF   = self.sun.at(ts.tdb_jd(JDnow)).position.m
+            MoonPos_ICRF  = self.moon.at(ts.tdb_jd(JDnow)).position.m
+            # GCRF
             SunPos_GCRF = SunPos_ICRF - EarthPos_ICRF
-
-        # add zero speed to complete state vector (because not needed here)
+            MoonPos_GCRF = MoonPos_ICRF - EarthPos_ICRF
+    
+        # add zero speed to complete state vector 
+        # (needed for transform_GCRF_MoonLLAplanetocentric()))
         SunPosVel_GCRF = np.append(SunPos_GCRF, np.zeros(3))
-
-        # LLA of bodies in Moon PA frame (latitude, longitude, altitude)
-        EarthMoonLLA, _, _, _, _, _, _, _ = \
-            self.transform_GCRF_MoonLLAplanetocentric(JDnow, np.zeros(6), preloadedObjects=preloadedObjects)
-        SunMoonLLA, _, _, _, _, _, _, _ = \
-            self.transform_GCRF_MoonLLAplanetocentric(JDnow, SunPosVel_GCRF, preloadedObjects=preloadedObjects)
-
-        # Solid Lunar Tide external Love numbers taken from GRAIL Primary Mission Data (2013)
-        # https://ai-solutions.com/_help_Files/solid_tides_model.htm
-        knm = np.array([[0,0,0],
-                        [0,0,0],
-                        [0.02408, 0.02414, 0.02394]])
-
+    
+    
+        if body == 'Moon':
+        
+            #
+            # For Moon 
+            #
+            
+            # LLA of bodies in Moon PA frame (latitude, longitude, altitude)
+            object1LLA, _, _, _, _, _, _, _ = \
+                self.transform_GCRF_MoonLLAplanetocentric(JDnow, np.zeros(6), preloadedObjects=preloadedObjects)
+            object2LLA, _, _, _, _, _, _, _ = \
+                self.transform_GCRF_MoonLLAplanetocentric(JDnow, SunPosVel_GCRF, preloadedObjects=preloadedObjects)
+            
+            # GM ratios
+            object1GMratio = self.EARTH_GM / self.MOON_GM
+            object2GMratio = self.SUN_GM / self.MOON_GM
+            
+            # Distance ratios
+            object1Distratio = MOON_RADIUS / np.linalg.norm(MoonPos_GCRF)
+            object2Distratio = MOON_RADIUS / np.linalg.norm(SunPos_GCRF-MoonPos_GCRF)
+            
+            # Solid Lunar Tide external Love numbers taken from GRAIL Primary Mission Data (2013)
+            # https://ai-solutions.com/_help_Files/solid_tides_model.htm
+            knm = np.array([[0,0,0],
+                            [0,0,0],
+                            [0.02408, 0.02414, 0.02394]])
+            
+        else:
+            
+            #
+            # For Earth
+            #
+            
+            # LLA 
+            object1LLA = self.transform_GCRF_LLAgeocentric(JDnow, MoonPos_GCRF)
+            object2LLA = self.transform_GCRF_LLAgeocentric(JDnow, SunPos_GCRF)
+            
+            # GM ratios
+            object1GMratio = self.MOON_GM / self.EARTH_GM
+            object2GMratio = self.SUN_GM / self.EARTH_GM
+            
+            # Distance ratios
+            object1Distratio = EARTH_RADIUS / np.linalg.norm(MoonPos_GCRF)
+            object2Distratio = EARTH_RADIUS / np.linalg.norm(SunPos_GCRF)
+            
+            # Solid Lunar Tide from IERS 2010, page 83
+            knm = np.array([[0,0,0,0],
+                            [0,0,0,0],
+                            [0.30190,0.29830,0.30102,0],
+                            [0.093,0.093,0.093,0.094]
+                            ])
+ 
+        #
+        # Common processing 
+        #
+                
+        # max degree
+        nmax = knm.shape[0]-1
+        
+        # memory for new coeffs
+        dCnm = np.zeros((nmax+1, nmax+1))
+        dSnm = np.zeros((nmax+1, nmax+1))
+        
         # normalized Legendre polynomials Pnm
-        PnmEarth = pysh.legendre.legendre(2,np.sin(EarthMoonLLA[0] * DEG2RAD))
-        PnmSun   = pysh.legendre.legendre(2,np.sin(SunMoonLLA[0] * DEG2RAD))
+        object1Pnm = pysh.legendre.legendre(nmax,np.sin(object1LLA[0] * DEG2RAD))
+        object2Pnm = pysh.legendre.legendre(nmax,np.sin(object2LLA[0] * DEG2RAD))
+        
+        # start only at degree 2
+        for n in range(2,nmax+1):
+            for m in range(n+1):
+                
+                knmfactor = knm[n,m] / (2*n+1)
+                
+                object1 = object1GMratio * object1Distratio**(n+1) * object1Pnm[n,m]
+                object2 = object2GMratio * object2Distratio**(n+1) * object2Pnm[n,m]
+                           
+                dCnm[n,m] = object1 * np.cos(m * object1LLA[1] * DEG2RAD) + \
+                            object2 * np.cos(m * object2LLA[1] * DEG2RAD)
+                            
+                dSnm[n,m] = object1 * np.sin(m * object1LLA[1] * DEG2RAD) + \
+                            object2 * np.sin(m * object2LLA[1] * DEG2RAD)            
+                            
+                dCnm[n,m] *= knmfactor            
+                dSnm[n,m] *= knmfactor
 
-        # precalculate ratios-factors
-        ratiosEarth = (self.EARTH_GM/self.MOON_GM) * (MOON_RADIUS/EarthMoonLLA[2])**3
-        ratiosSun   = (self.SUN_GM/self.MOON_GM)   * (MOON_RADIUS/SunMoonLLA[2])**3
-
-        # delta coefficients (for n=2 and m=0...2 --> 3 values)
-        # first row: C2m, second row: S2m
-        dcoeffs = np.zeros((2,3))
-
-        # C2,0
-        dcoeffs[0,0] = knm[2,0] * ( \
-            ratiosEarth * PnmEarth[2,0] + \
-            ratiosSun   * PnmSun[2,0]) /5
-        # C2,1
-        dcoeffs[0,1] = knm[2,1] *  ( \
-            ratiosEarth * PnmEarth[2,1] * np.cos(EarthMoonLLA[1] * DEG2RAD) + \
-            ratiosSun   * PnmSun[2,1]   * np.cos(SunMoonLLA[1]   * DEG2RAD)) /5
-        # C2,2
-        dcoeffs[0,2] = knm[2,2] * ( \
-            ratiosEarth * PnmEarth[2,2] * np.cos(2 * EarthMoonLLA[1] * DEG2RAD) + \
-            ratiosSun   * PnmSun[2,2]   * np.cos(2 * SunMoonLLA[1] * DEG2RAD)) /5
-        # S2,1 = 0 due to Im(exp(i0)) = 0
-        # S2,1
-        dcoeffs[1,1] = knm[2,1] * ( \
-            ratiosEarth * PnmEarth[2,1] * np.sin(EarthMoonLLA[1] * DEG2RAD) + \
-            ratiosSun   * PnmSun[2,1]   * np.sin(SunMoonLLA[1]   * DEG2RAD)) /5
-        # S2,2
-        dcoeffs[1,2] = knm[2,2] * ( \
-            ratiosEarth * PnmEarth[2,2] * np.sin(2 * EarthMoonLLA[1] * DEG2RAD) + \
-            ratiosSun   * PnmSun[2,2]   * np.sin(2 * SunMoonLLA[1]   * DEG2RAD)) /5
-
-        return dcoeffs
+        return dCnm, dSnm
 
     def transform_GCRF_MoonLLAplanetocentric(self, JDnow, y, refSystem='PA', preloadedObjects=0):
         """
@@ -3037,18 +3133,23 @@ class MRSmission():
 
             # Earth acceleration
             elif datatype == 'EarthAcceleration':
+                print('MRS:\t\tAdding Earth gravity (incl. SH/tides if selected) to dataframe.')
+                
                 # initial segment pointer
-                forcesID = -1
+                self.forcesID = -1
 
                 # get step wise atmospheric values
                 for i in range(lenDF):
 
-                    # detect new segment and update atmospheric values
-                    if DF.forcesID[i]>forcesID:
-                        forcesID = DF.forcesID[i]
+                    # detect new forces config 
+                    if DF.forcesID[i]!=self.forcesID:
+                        self.forcesID = DF.forcesID[i]
+                        
+                        # set up tides
+                        self.EarthTides = self.MD.forcesSettings.EarthTides[self.forcesID]
 
                         # get lmax
-                        lmax = self.MD.forcesSettings.EarthSHn[forcesID]
+                        lmax = self.MD.forcesSettings.EarthSHn[self.forcesID]
 
                     # call function if SH number is provided
                     if lmax:
@@ -3056,7 +3157,7 @@ class MRSmission():
                     # if no lmax, use point gravity
                     else:
                         r_norm = np.linalg.norm(statevecs[i,:3])
-                        objectAcc = - GM * statevecs[i,:3]/r_norm**3
+                        objectAcc = - self.EARTH_GM * statevecs[i,:3]/r_norm**3
 
 
                     DF.loc[i,['EarthAccX','EarthAccY','EarthAccZ']] = objectAcc
@@ -3448,7 +3549,7 @@ class MRSmission():
         """
 
         # if timevec is provided, use the timestamps
-        if timevec:
+        if np.sum(timevec) != 0:
 
             # check sizes
             if timevec.shape[0] != statevecs.shape[0]:

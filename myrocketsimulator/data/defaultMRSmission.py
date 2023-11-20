@@ -72,15 +72,14 @@ class MRSmissionData():
     # adjust the behaviour of the simulator. 
     
     ### solve_ivp settings; default mission provides low values for fast processing
-    integrator_atol = 1e-5 # solve_ivp atol value [m]; default: 1e-9
-    integrator_rtol = 1e-5 # solve_ivp rtol value; default: 1e-9
+    integrator_atol = 1e-9 # solve_ivp atol value [m]; default: 1e-9
+    integrator_rtol = 1e-9 # solve_ivp rtol value; default: 1e-9
     integrator_max_step = 60 # solve_ivp max_step value [s]; default: 10.
     
     ### gravity settings
     # EarthGravModel = 'EGM96'  # possible are: 'EGM96', 'EGM2008'
     # EarthGravZonalOnly = 0    # use only zonal spherical harmonics
     # DEephemeris = 'DE421'     # possible are: 'DE421', 'DE440'
-    # MoonTides = 0             # experimental; not fully implemtend yet
     # OE_TEME = 0               # if 0: OE calculated in ICRF, if 1: OE calc. in TEME
     # fastEphemeris = 0         # if set to 1, planet positions will be fixed (fast)
 
@@ -170,14 +169,16 @@ class MRSmissionData():
     #   - atmosModel: only nrlmsise00 implemented in MRS 1.0/1.1. Can be '-' if no drag used.
     #   - drag: 0/1 wether to not use or use atmospheric drag force
     #   - SRP: 0/1 wether to not use or use solar radiation pressure force
+    #   - EarthTides: 0/1 wether to not use or use solid Earth tides
+    #   - MoonTides: 0/1 wether ot not use or use solid Moon tides
     #   - activeSC: 0/1 wether to not use or to use active spacecraft; only 0 allowed for MRS 1.0/1.1
     #   - comment: string, only used for display 
     
     forcesSettings = pd.DataFrame([
-                    [0,       0,   ['Earth'], '-',                0, 0, 0,  'No perturbating forces'],
-                    [35,      0,   ['Earth', 'Sun', 'Moon'], 'nrlmsise00', 1, 1, 0, 'High fidelity simulation.'],
+                    [0,       0,   ['Earth'], '-',                0, 0, 0, 0, 0,  'No perturbating forces'],
+                    [35,      0,   ['Earth', 'Sun', 'Moon'], 'nrlmsise00', 1, 1, 1, 0, 0, 'High fidelity simulation.'],
                     ], 
-           columns= ['EarthSHn','MoonSHn','planets','atmosModel','drag','SRP', 'activeSC', 'comment'])
+           columns= ['EarthSHn','MoonSHn','planets','atmosModel','drag','SRP', 'EarthTides', 'MoonTides', 'activeSC', 'comment'])
     
     # delta-v maneuvers are described in the maneuverSettings-table. Parameters:
     #   - frame: frame that described the xyz-axis of the maneuver. Implemented are:
