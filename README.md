@@ -6,9 +6,10 @@ The simulator relies on a high-fidelity propagator that includes all relevant pe
 
 An early, non-published release of MRS was used to perform a preliminary flight simulation and analysis of the Moon-bound Artemis I mission. Download the paper [Preliminary Launch Trajectory Simulation for Artemis I with the Space Launch System]( https://www.researchgate.net/publication/362270344_Preliminary_Launch_Trajectory_Simulation_for_Artemis_I_with_the_Space_Launch_System).
 
-Relevant features of MRS 1.0:
+Relevant features of MRS 1.1:
 -	Multi-segment simulations providing distinct force configurations and delta-v maneuvers. 
 -	Earth and Moon gravity with spherical harmonics using [pyshtools]( https://shtools.github.io/SHTOOLS/).
+-	Solid tides for Earth and Moon.
 -	Third bodies (Sun, Venus, Mars, Jupiter, Moon).
 -	Precise ephemeris and coordinate transformations through [Skyfield]( https://rhodesmill.org/skyfield/).
 -	Atmospheric modelling with [PyNRLMSISE-00](https://github.com/st-bender/pynrlmsise00).
