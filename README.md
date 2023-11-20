@@ -88,7 +88,7 @@ Demo missions will be added for later versions of MRS featuring new relevant fun
 ## Documentation
 MRS does currently not provide its own help function or further documentation, but can be easily learned by using the following resources:
 - Demo missions.
-- The publication [Spacecraft Orbit Propagation with the MyRocketSimulator Python Package]( https://www.researchgate.net/publication/375293398_Spacecraft_Orbit_Propagation_with_the_MyRocketSimulator_Python_Package) contains a good summary of MRS 1.0/1.1 features. 
+- The publication [Spacecraft Orbit Propagation with the MyRocketSimulator Python Package]( https://www.researchgate.net/publication/375293398_Spacecraft_Orbit_Propagation_with_the_MyRocketSimulator_Python_Package) contains a good summary of MRS 1.0 features. More features have been added since its publication and may be described in later publications.
 - Read the code of the MRS default mission (myrocketsimulator/data/defaultMRSmission.py).
 - Print the docstrings of all methods used in the demo mission, e.g. through:
 ```python
