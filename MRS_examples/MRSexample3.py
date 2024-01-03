@@ -48,7 +48,7 @@ The following MRS features are included:
     - export mission data frame as csv-file
         
 
-The execution time is arund 12 seconds (i7 Quadcore 1.7 GHz). 
+The execution time is arund 2 seconds (i7 Quadcore 1.7 GHz). 
 
 
 """

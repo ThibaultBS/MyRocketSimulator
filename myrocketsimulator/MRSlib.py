@@ -27,6 +27,7 @@ from skyfield.elementslib import OsculatingElements
 
 from .data import defaultMRSmission
 from .MRSrocket import SpaceCraft
+from .MRSguidance import Guidance
 
 
 # general constants
@@ -148,6 +149,59 @@ class MRSstaticSpacecraft():
         return self.eventsDF
 
 
+class MRSstaticGuidance():
+    """
+    Class for static spacecrafts. The returned guidance vector (through 
+    get_guidance()) has the same direction as the velocity vector of the 
+    provided state vector y.
+
+    """
+
+    def __init__(self):
+         """
+         Initializes a static guidance object.
+
+         Parameters
+         ----------
+         None.
+
+         Returns
+         -------
+         None.
+
+         """
+         
+         # set name
+         self.guidancename = 'No guidance'
+
+         # guidance mode (active/static)
+         self.mode = 'static'
+
+    def get_guidance(self, JDnow, y, MET, mode='TrueMET'):
+        """
+
+         JDnow : float
+            Current Julian Date (TBD); not used.
+         y : array of floats
+             State vector in GCRF.
+         MET : float
+             Mission Elapsed Time; not used.
+         mode : string, optional
+             Mode of guidance determination. The default is 'TrueMET'; not used.
+
+         Returns
+         -------
+         gVec : array of floats
+             Guidance vector in GCRF.
+
+        """
+
+        # guidance direction = velocity direction
+        gVec = y[3:]/np.linalg.norm(y[3:])
+        
+        return gVec
+
+
 
 class MRSmission():
     """
@@ -178,6 +232,8 @@ class MRSmission():
         Trajectory simulation result and additional data
     SC : object
         Object that represents the loaded spacecraft
+    GO: object
+        Object that is used to calculate the guidance vector for thrust
 
 
     Methods
@@ -433,12 +489,14 @@ class MRSmission():
             # find mission segments after tend_MET
             indexMissionSegmentsToDrop = \
                 self.MD.missionSegments[self.MD.missionSegments.MET>self.MD.tend_MET].index
-            # drop these segments
-            self.MD.missionSegments.drop(indexMissionSegmentsToDrop, inplace=True)
-            # make new last row
-            self.MD.missionSegments.loc[len(self.MD.missionSegments),\
-                                        ['MET', 'type', 'configID', 'comment']] = \
-                self.MD.tend_MET, 0, 0, 'Early simulation end (tend_MET)'
+            # drop if mission ends before end
+            if not indexMissionSegmentsToDrop.empty:
+                # drop these segments
+                self.MD.missionSegments.drop(indexMissionSegmentsToDrop, inplace=True)
+                # make new last row
+                self.MD.missionSegments.loc[len(self.MD.missionSegments),\
+                                            ['MET', 'type', 'configID', 'comment']] = \
+                    self.MD.tend_MET, 0, 0, 'Early simulation end (tend_MET)'
 
 
 
@@ -505,8 +563,8 @@ class MRSmission():
         # events
         self.eventCrashed = 0
 
-        # if launching from pad, calc local ENU for time of lifotff (determined by change of propagation mode)
-        if self.MD.launchtype==1:
+        # if launchpad is provided, calc local ENU for time of lifotff (determined by change of propagation mode)
+        if isinstance(self.MD.launchsite_LLA, np.ndarray):
             # loop through segments
             for i in range(len(self.MD.missionSegments)):
                 # find first occurence of propagationmode = 1
@@ -522,10 +580,14 @@ class MRSmission():
             self.y0_liftoff = self.transform_LLAgeodetic_GCRF(self.MD.t0_JD_liftoff, self.MD.launchsite_LLA)
             # if Earth-SH are used in lauch segment:
             if lmax_launchsegment:
-                self.ENU_liftoff = self.get_ENUvec_get_EarthGravity(self.MD.t0_JD_liftoff, self.y0_liftoff, lmax_launchsegment)
+                self.ENU_liftoff = self.get_ENUvec_EarthGravity(self.MD.t0_JD_liftoff, self.y0_liftoff, lmax_launchsegment)
             # else, use simpler ENU calculation (based on ellipsoid of Earth, going through Skyfield)
             else:
-                self.ENU_liftoff = self.get_ENUvec_Earth(self.MD.t0_JD_liftoff, self.y0_liftoff)
+                self.ENU_liftoff = self.get_ENUvec_Earth(self.MD.t0_JD_liftoff, self.y0_liftoff, frame='WGS84')
+
+        # no launchsite --> ENU_liftoff = GCRF axes
+        else:
+            self.ENU_liftoff = np.eye(3)
 
         #
         # LOAD SPACECRAFT
@@ -545,6 +607,23 @@ class MRSmission():
         else:
             # make a default spacecraft
             self.SC = MRSstaticSpacecraft()
+            
+        #
+        # LOAD GUIDANCE
+        #
+        
+        # check that gudiacne data is available in mission data
+        if hasattr(self.MD, 'guidanceData'):
+            print('MRS:\t\tLoading guidance object '+self.MD.guidanceData.name+'.')
+            self.GO = Guidance(self.MD.guidanceData)
+            
+        # no guidance provided
+        else:
+            self.GO = MRSstaticGuidance()
+            
+        # set up ENU liftoff
+        self.GO.ENU_liftoff = self.ENU_liftoff * 1.0
+        
 
         #
         # LOOK FOR ERRORS IN MISSION DATA
@@ -1100,7 +1179,7 @@ class MRSmission():
         Propagates the spaecraft within the given mission segment; fixed step
         size (provided in misison data propaSettings)
         To be used with active spacecrafts.
-        Not recommended for passible spacecrafts.
+        Not recommended for static spacecrafts.
         Resulting state vectors are stored to TempDF and (in run_mission())
         to the missionDF.
 
@@ -1131,7 +1210,7 @@ class MRSmission():
         max_step = self.integrator_max_step
         atol = self.integrator_atol
         rtol = self.integrator_rtol
-        first_step = 3
+        first_step = 3 # TODO: needs to be set to value equal (or less) to step size of mode 2
 
 
         # number of MET times required to be calculated
@@ -1149,6 +1228,10 @@ class MRSmission():
 
             # set fixed pointer for spacecraft
             self.SC.set_fixedThrottlePointer(self.METvec[i])
+            
+            # update guidance
+            _ = self.GO.get_guidance(self.MD.t0_JD + (self.METvec[0] - self.MD.t0_MET) * SEC2DAYS,\
+                                     y, self.METvec[0], mode='TrueMET')
 
             # perform solve_ivp
             # https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html
@@ -1220,6 +1303,8 @@ class MRSmission():
         """
         Internal function.
         Returns the slopes for given state vector.
+        Only to be called by integrator, as get_acceleration is called in mode
+        'intermediateMET'.
 
         Parameters
         ----------
@@ -1235,10 +1320,10 @@ class MRSmission():
 
         """
 
-        return np.hstack((y[3:6], self.get_acceleration(MET, y)))
+        return np.hstack((y[3:6], self.get_acceleration(MET, y, mode='intermediateMET')))
 
 
-    def get_acceleration(self, MET, y):
+    def get_acceleration(self, MET, y, mode='TrueMET'):
         """
         Internal function.
         Calculates the acceleration of the spacecraft (i.e. the slopes of
@@ -1305,7 +1390,7 @@ class MRSmission():
                                                    atmosvalues[1], verbose='v')
 
             # get guidance
-            thrustVector = np.zeros(3) # not implemented yet
+            thrustVector = self.GO.get_guidance(JDnow, y, MET, mode=mode)
 
             # acceleration by TVC
             accThrust = thrustVector * thrustForce / SCmass
@@ -2280,11 +2365,85 @@ class MRSmission():
         #  GCRF to ITRS transformation
         R = itrs.rotation_at(ts.tdb_jd(JDnow))
         # Earth rotation axis in GCRF
-        earthRotAxisGCRF = np.linalg.inv(R).dot(earthRotAxisITRS)
+        earthRotAxisGCRF = R.T.dot(earthRotAxisITRS)
         # relative velocity
         ECEFvel = y[3:] - np.cross(EARTH_ROT_SPEED * earthRotAxisGCRF, y[:3])
 
         return ECEFvel
+    
+    def get_liftVector(self, gVec, vrel):
+        """
+        Returns the vector of the lift direction.
+
+        Parameters
+        ----------
+        JDnow : float
+            Current Julian Date (TBD).
+        y : array of floats
+            State vector in GCRF.
+        gVec : array of floats
+            Guidance vector / thrust direction / rocket pointing direction.
+        vrel : array of floats
+            Relative velocity of spacecraft w.r.t Earth surface/atmosphere.
+
+        Returns
+        -------
+        liftVec: array of floats
+            Direction of lift.
+
+        """
+        
+        # normal to plane described by vrel and gVec
+        gVecXvrel = np.cross(gVec, vrel)
+        
+        # lift direction
+        liftVec = np.cross(vrel, gVecXvrel)
+        liftVec = liftVec / np.linalg.norm(liftVec)
+        
+        return liftVec
+    
+    def get_AoAangle(self, vrel, gVec):
+        """
+        Returns Angle of Attack (AoA). Vectorized.
+
+        Parameters
+        ----------
+        vrel : array of floats
+            Velocity vector w.r.t. to Earth surface (relative velocity).
+        gVec : array of floats
+            Guidance vector / thrust direction / rocket pointing direction.
+
+        Returns
+        -------
+        AoA : float / array of floats
+            Angle between velocity and rocket pointing direction [rad].
+
+        """
+        
+        # single values
+        if vrel.shape == (3,):
+            cosAoA = vrel.dot(gVec)/(np.linalg.norm(vrel)*np.linalg.norm(gVec))
+            
+            # sometimes, cos values are out of -1/1; correction needed
+            if cosAoA>1:
+                cosAoA = 1
+            elif cosAoA<1:
+                cosAoA = -1
+            
+            AoA = np.arccos(cosAoA)
+        
+        # multiple values
+        else:
+            cosAoA = np.diag(vrel.dot(gVec.T))/\
+                     (np.linalg.norm(vrel, axis=1)*np.linalg.norm(gVec, axis=1))
+            
+            # sometimes, cos values are out of -1/1; correction needed
+            cosAoA[cosAoA > 1.] =  1.
+            cosAoA[cosAoA <-1.] = -1.
+            
+            AoA = np.arccos(cosAoA)
+    
+        return AoA
 
     def get_atmos(self, JDnow, y):
         """
@@ -2391,7 +2550,7 @@ class MRSmission():
     def get_ENUvec(self, JDnow, y):
         """
         Internal function. Vectorized.
-        Calculates local ENU vectors for provided statevec's positions in
+        Calculates local ENU vectors for provided statevec's positions in an
         object's frame.
         Following use of these ENU vectors require data processing in object's
         frame (e.g. for HA/FPA)
@@ -2413,7 +2572,7 @@ class MRSmission():
         """
 
         # check if single statevec or if list of statevecs
-        if y.shape == (6,):
+        if y.shape == (6,) or y.shape == (3,):
             y = np.expand_dims(y, axis=0)
 
         # get UP vectors
@@ -2433,7 +2592,7 @@ class MRSmission():
         return ENU
 
 
-    def get_ENUvec_Earth(self, JDnow, y):
+    def get_ENUvec_Earth(self, JDnow, y, frame='TOD'):
         """
         Internal function. Vectorized.
         Calculates ENU vectors of provided statevec positions for Earth, in
@@ -2447,6 +2606,10 @@ class MRSmission():
             Current Julian Date (TBD)
         y : array of floats
             State vector in the reference frame of planet
+        frame: string
+            Frame (TOD or WGS84) in which ENU is determined. WGS84 considers
+            the shape of Earth, TOD assumes circular object. 
+            Default is TOD. WGS84 only usueful for initial launch direction.
 
 
         Returns
@@ -2455,37 +2618,57 @@ class MRSmission():
             East, North, Up vectors / rotation matrices in GCRF
 
         """
-
-
         # check if single statevec or if list of statevecs
         if y.shape == (6,):
             y = np.expand_dims(y, axis=0)
+            
+        if frame=='WGS84':
 
-        t = ts.tdb_jd(JDnow)
-        d = Distance(m=y[:,:3].T) # input is nxm, n = 3, m = number of provided statevecs
-        p = Geocentric(d.au, t=t) # p is in GCRF
-        g = wgs84.geographic_position_of(p) # WGS84 position
+            t = ts.tdb_jd(JDnow)
+            d = Distance(m=y[:,:3].T) # input is nxm, n = 3, m = number of provided statevecs
+            p = Geocentric(d.au, t=t) # p is in GCRF
+            g = wgs84.geographic_position_of(p) # WGS84 position
+    
+            NEU = g.rotation_at(t)
+            # NEU returns a 3D matrix:
+            # axis 0: the three components of the originating system (North, East, Up)
+            # axis 1: the m different times (=amount of statevecs provided)
+            # axis 2: the n (three) dimensions of the target systemt
+    
+            # New matrix to bring into right order
+            ENU = np.zeros((NEU.shape))
+            ENU[0,:,:] = NEU[1,:,:] # first row becomes East
+            ENU[1,:,:] = NEU[0,:,:] # seconds row becomes North
+            ENU[2,:,:] = NEU[2,:,:] # last row remains Up
+    
+            # for return value, the matrix is transposed
+            # axis 0: the m different times (=amount of statevecs provided)
+            # axis 1: thee three dimensions of the target system (GCRF)
+            # axis 2: the three dimensions of the originating system (East, North, Up)
+            
+            ENU = ENU.T
 
-        NEU = g.rotation_at(t)
-        # NEU returns a 3D matrix:
-        # axis 0: the three components of the originating system (North, East, Up)
-        # axis 1: the m different times (=amount of statevecs provided)
-        # axis 2: the n (three) dimensions of the target systemt
+        # true equator and equinox of date (TETE, TOD)
+        else:
+            R = true_equator_and_equinox_of_date.rotation_at(ts.tdb_jd(JDnow))
 
-        # New matrix to bring into right order
-        ENU = np.zeros((NEU.shape))
-        ENU[0,:,:] = NEU[1,:,:] # first row becomes East
-        ENU[1,:,:] = NEU[0,:,:] # seconds row becomes North
-        ENU[2,:,:] = NEU[2,:,:] # last row remains Up
+            # position in TOD
+            pos_TOD = np.einsum('ij...,j...->i...', R, y[:,:3].T).T 
+             
+            # get local ENU in TOD
+            ENU_TOD = self.get_ENUvec(JDnow, pos_TOD)
+              
+            # transform back to GCRF - not vectorized; #TODO
+            if R.shape == (3,3):
+                ENU = R.T.dot(np.squeeze(ENU_TOD))
+            else:
+                ENU = np.zeros((len(JDnow),3,3))
+                for i in range(len(JDnow)):
+                    ENU[i,:,:] = R[:,:,i].T.dot(ENU_TOD[i,:,:])
 
-        # for return value, the matrix is transposed
-        # axis 0: the m different times (=amount of statevecs provided)
-        # axis 1: thee three dimensions of the target system (GCRF)
-        # axis 2: the three dimensions of the originating system (East, North, Up)
+        return np.squeeze(ENU)
 
-        return ENU.T
-
-    def get_ENUvec_get_EarthGravity(self, JDnow, y, lmax):
+    def get_ENUvec_EarthGravity(self, JDnow, y, lmax):
         """
         Internal function. NOT vectorized
         Calculates ENU vectors at provided statevec position for Earth in GCRF,
@@ -2628,7 +2811,7 @@ class MRSmission():
         Works for:
             - GCRF (Earth)
             - Earth-fixed
-            - Moon-fixed
+            - Moon-centered
 
         Parameters
         ----------
@@ -2711,7 +2894,7 @@ class MRSmission():
         # get local VNB frame
         VNB = self.get_VNBframe(JDnow, y, planet)
 
-        # get velocity in LVLH frame and apply deltaV (described in LVLH)
+        # get velocity in VNB frame and apply deltaV (described in LVLH)
         velVNB= VNB.T.dot(y[3:]) + deltaV
 
         # transform back into original frame and return statevec
@@ -2732,13 +2915,17 @@ class MRSmission():
         Returns
         -------
         FPA : float
-            Flight Path Angle [°] w.r.t. to Earth surface.
+            Flight Path Angle [rad] w.r.t. to Earth surface.
         HA : float
-            Heading Angle [°] w.r.t. to Earth surface.
+            Heading Angle [rad] w.r.t. to Earth surface.
         EFVEL : float
             Earth-fixed velocity [m/s].
 
         """
+        
+        # check if single statevec or if list of statevecs
+        if y.shape == (6,):
+            y = np.expand_dims(y, axis=0)
 
         # change velocity vectors from inertial to Earth-fixed
 
@@ -2746,6 +2933,12 @@ class MRSmission():
         earthRotAxisITRS = np.array([0,0,1])
         #  GCRF to ITRS
         R = itrs.rotation_at(ts.tdb_jd(JDnow))
+        
+        # add dimension to R if only a float value (instead of array) of JD
+        # values was provided
+        if R.shape == (3,3):
+            R = np.expand_dims(R, axis=2)
+            
         R = np.transpose(R,(2,0,1)) # first dimension is time
 
         # Earth rotation axis in GCRF
@@ -2755,14 +2948,14 @@ class MRSmission():
         yEF[:,3:] -= np.cross(EARTH_ROT_SPEED * earthRotAxisGCRF, yEF[:,:3])
 
         # get FPA / HA
-        FPA, HA = self.get_FPAHA(JDnow, yEF, planet='Earth')
+        FPA, HA = self.get_FPAHA(JDnow, yEF, frame='Earth')
 
         # EF vel
         EFVEL = np.linalg.norm(yEF[:,3:], axis=1)
 
-        return FPA, HA, EFVEL
+        return np.squeeze(FPA), np.squeeze(HA), np.squeeze(EFVEL)
 
-    def get_FPAHA(self, JDnow, y, planet='Earth'):
+    def get_FPAHA(self, JDnow, y, frame='Earth'):
         """
         Internal function. Vectorized.
         Returns FPA/HA in frame of provided statevectors. In case planet Earth
@@ -2771,18 +2964,18 @@ class MRSmission():
         Parameters
         ----------
         JDnow : float
-            Current Julian Date (TBD).
+            Current Julian Date (TDB).
         y : array of floats
             State vector in local frame (GCRF for Earth)
-        planet : string, optional
-            Only relevant for Earth. The default is 'Earth'.
+        frame : string, optional
+            Frame in which FPA/HA are calculated. The default is 'Earth' 
 
         Returns
         -------
         FPA : float
-            Flight Path Angle [°] w.r.t. to state vector system / Earth surface
+            Flight Path Angle [rad] w.r.t. to state vector system / Earth surface
         HA : float
-            Heading Angle [°] w.r.t. to state vector system / Earth surface
+            Heading Angle [rad] w.r.t. to state vector system / Earth surface
 
         """
 
@@ -2790,11 +2983,17 @@ class MRSmission():
         if y.shape == (6,):
             y = np.expand_dims(y, axis=0)
 
-        if planet == 'Earth':
+        if frame == 'Earth':
             # get local ENU values for Earth
             ENU = self.get_ENUvec_Earth(JDnow, y)
+        elif frame == 'launchsite':
+            ENU = self.ENU_liftoff * 1.0
         else:
             ENU = self.get_ENUvec(JDnow, y)
+            
+        # add dimension to ENU if only a 2D matrix was returned
+        if ENU.shape == (3,3):
+            ENU = np.expand_dims(ENU, axis=0)
 
         # calc angle between velocity vec and local UP
         # - calc dot product between UP and velocity
@@ -2838,7 +3037,7 @@ class MRSmission():
         # correct to positive values
         HA[indNegAzimuth] += 2*np.pi
 
-        return FPA, HA
+        return np.squeeze(FPA), np.squeeze(HA)
 
 
     def get_RPSpos(self, JDnow, y, updateMissionDF=0):
@@ -2911,6 +3110,38 @@ class MRSmission():
             RPScoord[i,:] = R[i,:,:].T.dot(r_SC[i,:])
 
         return RPScoord
+    
+    def get_EarthRangeToLaunchsite(self, JDnow, y):
+        """
+        Internal function; not vectorized.
+        Returns the ground distance between spacecraft and actual position of
+        launchsite.
+
+        Parameters
+        ----------
+        JDnow : float
+            Current Julian Date (TBD).
+        y : array of floats
+            State vector in GCRF.
+
+        Returns
+        -------
+        rangeToLaunchsite : float
+            Ground distance between spacecraft and launchsite.
+
+        """
+        
+        # current GCRF position of launchsite
+        y_launchsite = self.transform_LLAgeodetic_GCRF(JDnow, self.MD.launchsite_LLA)
+        
+        # calc angle between launchsite position and spacecraft position
+        angle_between_positions = np.arccos(y[:3].dot(y_launchsite[:3])/\
+                                            (np.linalg.norm(y[:3])*np.linalg.norm(y_launchsite[:3])))
+            
+        # get distance on ground (assuming round Earth)
+        rangeToLaunchsite = angle_between_positions * EARTH_RADIUS
+        
+        return rangeToLaunchsite
 
     def transform_J2000SV(self, JDnow, y, targetFrame='GCRF'):
         """
@@ -3167,7 +3398,7 @@ class MRSmission():
             # EF velocity/HA/FPA
             elif datatype == 'EarthFixedFPAHAvel':
                 print('MRS:\t\tAdding FPA/HA/VEL (w.r.t. to Earth surface) to dataframe.')
-                FPA, HA, EFVEL = self. get_FPAHAVEL_EF(JDs, statevecs)
+                FPA, HA, EFVEL = self.get_FPAHAVEL_EF(JDs, statevecs)
                 DF['EarthFixedFPA'] = FPA * RAD2DEG
                 DF['EarthFixedHA']  = HA * RAD2DEG
                 DF['EarthFixedVEL'] = EFVEL
@@ -3191,6 +3422,22 @@ class MRSmission():
                     print('MRS:\t\tERROR: EarthAtmos needs to be added first; skipping Mach.')
                     continue
                 DF['Mach'] = DF['EarthFixedVEL'].to_numpy() / DF['atmosM1'].to_numpy()
+
+            # angle of attack
+            elif datatype == 'AoA':
+               
+                if not 'gVecX' in DF.columns:
+                    DF = self.expand_DF(['GuidanceVec'], DF)
+                
+                print('MRS:\t\tAdding Angle of Attack to dataframe.')
+                
+                vrel = np.zeros((lenDF,3))
+                for i in range(lenDF):
+                    vrel[i,:] = self.get_relVelocityEarth(JDs[i], statevecs[i])
+                
+                DF['AoA'] = self.get_AoAangle(vrel, DF[['gVecX', 'gVecY', 'gVecZ']].to_numpy()) * RAD2DEG
+                
+
 
             # static spacecraft properties
             elif datatype == 'SpacecraftStatic':
@@ -3272,7 +3519,7 @@ class MRSmission():
 
             elif datatype == 'EarthFPAHAvel':
                 print('MRS:\t\tAdding FPA/HA/VEL (w.r.t. to inertial Earth) to dataframe.')
-                FPA, HA = self.get_FPAHA(JDs, statevecs)
+                FPA, HA = self.get_FPAHA(JDs, statevecs, frame='Earth')
                 DF['EarthFPA'] = FPA * RAD2DEG
                 DF['EarthHA'] = HA * RAD2DEG
                 DF['EarthVEL'] = np.linalg.norm(statevecs[:,3:], axis=1)
@@ -3327,7 +3574,7 @@ class MRSmission():
             elif datatype == 'MoonFPAHAvel':
                 print('MRS:\t\tAdding FPA/HA/VEL (w.r.t. to Moon-frame) to dataframe.')
                 Moonstatevecs = DF[['MoonX', 'MoonY', 'MoonZ','MoonVx', 'MoonVy', 'MoonVz']].to_numpy()
-                FPA, HA = self.get_FPAHA(JDs, Moonstatevecs, planet='Moon')
+                FPA, HA = self.get_FPAHA(JDs, Moonstatevecs, frame='Moon')
                 DF['MoonFPA'] = FPA * RAD2DEG
                 DF['MoonHA'] = HA * RAD2DEG
                 DF['MoonVEL'] = np.linalg.norm(DF[['MoonVelX', 'MoonVelY', 'MoonVelZ' ]].to_numpy()[:,3:], axis=1)
@@ -3434,8 +3681,45 @@ class MRSmission():
                     DF.loc[i,['MO_VNBx', 'MO_VNBy', 'MO_VNBz']] = \
                         VNBrot.T.dot(DF.loc[i,['compPosDiffx','compPosDiffy','compPosDiffz']].astype('float').to_numpy() )
 
-
-
+            elif datatype == 'GuidanceVec':
+                
+                print('MRS:\t\tAdding guidance vector.')
+                
+                for i in range(lenDF):
+                    DF.loc[i,['gVecX', 'gVecY', 'gVecZ']] = self.GO.get_guidance(JDs[i], statevecs[i], DF.MET[i], mode='TrueMET')
+             
+            elif datatype == 'RangeToLaunchsite':
+                
+                print('MRS:\t\tAdding range distance to launchsite.')
+                
+                for i in range(lenDF):
+                    DF.loc[i,['range']] = self.get_EarthRangeToLaunchsite(JDs[i], statevecs[i])
+                    
+            
+            elif datatype == 'GuidanceVecAngles':
+                
+                if self.GO.mode == 'static':
+                    print('MRS:\t\tWARNING: no gVec angles available in static guidance; skipping.')
+                    continue
+       
+                if not 'gVecX' in DF.columns:
+                    DF = self.expand_DF(['GuidanceVec'], DF)
+                    
+                print('MRS:\t\tAdding guidance vector angle values.')
+                    
+                for i in range(lenDF):
+                    gVecValues = self.GO.get_delta_gvec_to_vel(JDs[i], statevecs[i], \
+                                    DF.loc[i,['gVecX', 'gVecY', 'gVecZ']].astype('float').to_numpy() )
+                    
+                    DF.loc[i,['gVec_Earth_ENU_abs_elev', 'gVec_Earth_ENU_abs_head']] = gVecValues[0,:2]
+                    DF.loc[i,['gVec_EFvel_Earth_ENU_delta_elev', 'gVec_EFvel_Earth_ENU_delta_head']] = gVecValues[1,:2]
+                    DF.loc[i,['gVec_SFvel_Earth_ENU_delta_elev', 'gVec_SFvel_Earth_ENU_delta_head']] = gVecValues[2,:2]
+                    DF.loc[i,['gVec_Launch_ENU_abs_pitch', 'gVec_Launch_ENU_abs_head']] = gVecValues[3,:2]
+                    DF.loc[i,['gVec_GCRF_abs_elev', 'gVec_GCRF_abs_head']] = gVecValues[4,:2]
+                    DF.loc[i,['gVec_VUW_abs_elev', 'gVec_VUW_abs_head']] = gVecValues[5,:2]
+                    DF.loc[i,['gVec_VNB_abs_elev', 'gVec_VNB_abs_head']] = gVecValues[6,:2]
+                    
+            
             # unknown kind of data requested
             else:
                 print('MRS:\t\tERROR: unknown kind of data type requested: ', datatype)

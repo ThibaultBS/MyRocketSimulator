@@ -28,7 +28,7 @@ The following MRS features are included:
         - plot difference between simulation and external state vectors positions
         - plot ground track (Earth)
 
-The execution time is arund 1 minute (i7 Quadcore 1.7 GHz). 
+The execution time is arund 8 seconds (i7 Quadcore 1.7 GHz). 
 The plotted error should have a maxium value of ~4e-5 meters (40 micrometers).
 
 The file ./GMATscripts/GMAT_example1_24hours.script is a GMAT script that can be

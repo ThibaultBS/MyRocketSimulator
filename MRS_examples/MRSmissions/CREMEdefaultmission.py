@@ -57,9 +57,9 @@ class MRSmissionData():
            columns= ['mode','method','stepsizePropa','forcesID','downsampleLog','comment'])
   
     forcesSettings = pd.DataFrame([
-                    [0,       0,   ['Earth'], 'nrlmsise00',                0, 0, 0,  'Forces Settings']
+                    [0,       0,   ['Earth'], 'nrlmsise00',               0, 0, 0, 0, 0,  'Forces Settings']
                    ], 
-           columns= ['EarthSHn','MoonSHn','planets','atmosModel','drag','SRP', 'activeSC', 'comment'])
+           columns= ['EarthSHn','MoonSHn','planets','atmosModel','drag','SRP', 'EarthTides', 'MoonTides', 'activeSC', 'comment'])
     
     maneuverSettings = pd.DataFrame([
                     ['VNB', 32.640, 0.0, 0.0, 'args', 'Earth', '-'],

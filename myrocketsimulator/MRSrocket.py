@@ -33,7 +33,7 @@ class SpaceCraft():
         # go through elements and initialize them as object and attach to list
         for i, SCelement in enumerate(self.SCD.SCelements.values):
             
-            # check that amunt is at least one
+            # check that amount is at least one
             if SCelement[1]>0:
                 self.SCelementsList.append(SpaceCraftElement(eval('self.SCD.'+SCelement[0]), SCelement[1]))
                 

@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "myrocketsimulator"
-version = "1.1.0"
+version = "1.1.1"
 license = {file = "LICENSE.txt"}
 authors = [
   { name="Thibault Bautze-Scherff", email="admin@myrocketsimulator.com" },
 ]
-description = "MyRocketSimulator allows to simulate complex rocket missions."
+description = "MyRocketSimulator is a Python package designed to simulate spacecrafts launching from Earth and orbiting around it or flying to the Moon."
 readme = "README.md"
 requires-python = ">=3.7"
 classifiers = [

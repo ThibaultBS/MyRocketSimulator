@@ -2,6 +2,26 @@ import datetime
 import numpy as np
 import pandas as pd
 
+# guidance frame IDs / DO NOT change these variables
+F_Earth_ENU_abs = 1
+F_EFvel_Earth_ENU_delta = 2
+F_SFvel_Earth_ENU_delta = 3
+F_Launch_ENU_abs = 4
+F_GCRF_abs = 5
+F_VUW_abs = 6
+F_VNB_abs = 7
+F_none = 10
+F_SM0_abs = 100
+F_SM1_abs = 101
+F_SM2_abs = 102
+F_SM3_abs = 103
+F_SM4_abs = 104
+F_SM5_abs = 105
+F_SM6_abs = 106
+F_SM7_abs = 107
+F_SM8_abs = 108
+F_SM9_abs = 109
+
 class MRSmissionData():
     """
     The MRSmissionData class contains all the mission specific settings. 
@@ -35,7 +55,7 @@ class MRSmissionData():
     #                   t0_UTC is always used, t0_JD is ignored
     t0_JD = 0 # JD TDB 
     t0_UTC = datetime.datetime.fromisoformat('2023-01-09T12:00:00.000') # UTC
-    #t0_UTC = datetime.datetime(2000,1,1,12,0,0,0) # [y,m,d,h,m,s,mus],UTC alternative
+    #t0_UTC = datetime.datetime(2000,1,1,12,0,0,0) # [y,m,d,h,m,s,mus], UTC alternative
     
     # The state vector y0 is relevant for missions starting in an orbit or while
     # ascent (launchtype 0). It provides three position and three velocity values.
@@ -63,9 +83,11 @@ class MRSmissionData():
     # The launchsite_LLA is the actual latitude, longitude, and altitude of the
     # launchsite.
     #
-    # MRS 1.0/1.1 does not support launches, this data is therefore not used.
-    launchsite_name = 'No launchsite in use'
-    launchsite_LLA = np.array([0.,0.,0])  # [deg, geodetic], [deg], [m]
+    # MRS 1.0/1.1 does not support launches, this data is therefore only used
+    # to calculate the range (ground distance to launchsite).
+    launchsite_name = 'Kennedy Space Center Launch Complex 39A'
+    launchsite_LLA = np.array([28.608389, -80.604333,30])  # [deg, geodetic], [deg], [m]
+   
     
     # MRSlib has several default values that configure numerous parts of the 
     # program and the libraries it's using. These values may be altered to
@@ -148,8 +170,8 @@ class MRSmissionData():
     propaSettings = pd.DataFrame([
                     [0,     '-',      0.1,            0,        10,     'Keeping LLA postion at launchsite'],
                     [1,     'DOP853',   1,            0,        60,     'LEO, auto-step size, no thrust, DOP853'],
-                    [1,     'DOP853',   60,            0,        30,     'GMAT'],
-                    [2,     'DOP853',   60,            1,       1,      '100 ms steps, DOP853']
+                    [1,     'DOP853',   60,           1,        30,     'Hi-Res; high fidelity forces'],
+                    [2,     'DOP853',   0.1,          1,        1,      '100 ms steps, DOP853']
                     ], 
            columns= ['mode','method','stepsizePropa','forcesID','downsampleLog','comment'])
   
@@ -234,9 +256,157 @@ class MRSmissionData():
             # the area A for the SRP formular in [m^2]
             SRParea = 2500  
             
-            
+      
+    class guidanceData():
+        """
+        
+        The following frames are available for both elevation/declination and
+        heading angle/right ascension. 
+        
+        F_Earth_ENU_abs: 
+            - Absolute angle values.
+            - Earth-bound East/North/Up frame (using WGS84 shape of Earth).
+            - Can be combined with: 
+                - F_Earth_ENU_abs
+                - F_EFvel_Earth_ENU_delta
+                - F_SFvel_Earth_ENU_delta
+            - Used to point the spacecraft in a fixed direction relative to
+              local topocentric ENU frame.
+            - Angle definitions:
+                - Elevation: angle from EN-plane towards U-vector 
+                - Heading: clockwise angle from N-vector (compass)
+              
+        F_EFvel_Earth_ENU_delta  
+            - Delta values to the Earth-fixed velocity vector, expressed in 
+              local ENU frame.
+            - Can be combined with:
+                - F_Earth_ENU_abs
+                - F_EFvel_Earth_ENU_delta
+                - F_SFvel_Earth_ENU_delta
+            - Used for drag free gravity turns during rocket launches.
+            - Angle definitions:
+                - Elevation: delta value to ENU elevation of Earth-fixed velocity.
+                - Heading: delta value to ENU heading of Earth-fixed velocity.
+                
+        F_SFvel_Earth_ENU_delta
+            - Delta values to the inertial velocity vector, expressed in local
+              ENU frame.
+            - Can be combined with:
+                - F_Earth_ENU_abs
+                - F_EFvel_Earth_ENU_delta
+                - F_SFvel_Earth_ENU_delta
+            - Used to point the rocket relatively to its velocity vector in
+              local topocentric ENU frame.
+            - Angle definitions:
+                - Elevation: delta value to ENU elevation of space-fixed velocity.
+                - Heading: delta value to ENU heading of space-fixed velocity.
+        
+        F_Launch_ENU_abs
+            - Absolute angle values.
+            - Inertially fixed ENU frame defined at time and place of launch.
+            - Elevation F_Launch_ENU_abs can be combined with Heading in: 
+                - F_Earth_ENU_abs
+                - F_EFvel_Earth_ENU_delta
+                - F_SFvel_Earth_ENU_delta
+                - F_Launch_ENU_abs
+            - Heading F_Launch_ENU_abs can be combined with Elevation in: 
+                - F_Launch_ENU_abs
+            - Used for pitch maneuvers of rocket launches (during whole ascent
+              or ahead of gravity turns).
+            - Angle definitions:
+                - Elevation: angle from U-vector towards EN-plane (pitch angle)
+                - Heading: clockwise angle from N-vector (compass).
+        
+        F_GCRF_abs
+            - Absolute angle values.
+            - GCRF frame (E=x, N=y, U=z).
+            - Cannot be combined with other frames.
+            - Used for inertially fixed maneuvers without a specific frame.
+            - Angle definitions:
+                - Elevation: declination, measured from xy-plane towards z-vector.
+                - Heading: right ascension, measured CCW from x- to y-vector.
+              
+        F_VUW_abs
+            - Absolute angle values.
+            - VUW frame:
+                - V (E, x) = velocity direction
+                - U (N, y) = W x V
+                - W (U, z) = V x r (r=position vector), direction of normal to 
+                  orbital plane.
+            - Cannot be combined with other frames.
+            - Used for delta-v maneuvers
+            - Angle definition:
+                - Elevation: declination, measured from VU-plane towards W-vector.
+                - Heading: right ascension, measured CCW from V- to U-vector.
+        
+        F_VNB_abs
+            - Absolute angle values.
+            - VUW frame:
+                - V (E, x) = velocity direction
+                - N (N, y) =  V x r (r=position vector), direction of normal to 
+                  orbital plane.
+                - B (U, z) = V x N
+            - Cannot be combined with other frames.
+            - Used for delta-v maneuvers
+            - Angle definition:
+                - Elevation: declination, measured from VN-plane towards B-vector.
+                - Heading: right ascension, measured CCW from V- to N-vector.
     
-            
+        F_none
+            - No frame in use.
+            - Angle values for elevation and heading are ignored.
+            - Guidance vector direction equals to velocity vector direction
+            - Cannot be combined with other frames.
+            - Used for long burns along the trajectory of the spacecraft.
+     
+        
+        F_SM0_abs - F_SM9_abs
+            - Absolute angle values.
+            - Manually set up intertial frames (e.g. for REFSMMAT).
+            - Cannot be combined with other frames.
+            - Used for delta-v maneuvers
+            - Angle definition:
+                - Elevation: declination, measured from VU-plane towards W-vector.
+                - Heading: right ascension, measured CCW from V- to U-vector.
+         
+        """
+        
+        # name of the guidance; string; only used for displayy
+        name = 'Exemplary MRS guidance'
+
+
+        gElevTab = np.array([
+            [0,     F_EFvel_Earth_ENU_delta,  0], # align 
+            [3600,  F_EFvel_Earth_ENU_delta,  10], # 
+            [7200,  F_EFvel_Earth_ENU_delta, 10], # 
+            [10800, F_EFvel_Earth_ENU_delta, 0], # 
+            [14400, F_Earth_ENU_abs,  30], # 
+            [18000, F_Earth_ENU_abs,  60], # 
+            [21600, F_Earth_ENU_abs,  89], # 
+            [25200, F_Earth_ENU_abs,   0], # 
+            [28800, F_SFvel_Earth_ENU_delta,  -10], # 
+            [32400, F_SFvel_Earth_ENU_delta,  -10], # 
+            [36000, F_SFvel_Earth_ENU_delta,  0], 
+            [39600, F_SFvel_Earth_ENU_delta,  0], 
+            [57600, F_Earth_ENU_abs,  20], # 
+            [61200, F_Earth_ENU_abs,  20], # 
+            [64800, F_Earth_ENU_abs,  0], #
+            [68400, F_none,  0]
+            ])
+        
+        gHeadTab = np.array([
+            [0,     F_SFvel_Earth_ENU_delta,  0], #
+            [39600, F_SFvel_Earth_ENU_delta, 10], # 
+            [43200, F_SFvel_Earth_ENU_delta,  0], # 
+            [46800, F_EFvel_Earth_ENU_delta,  0], # 
+            [50400, F_EFvel_Earth_ENU_delta, 10], # 
+            [54000, F_EFvel_Earth_ENU_delta,  0], # 
+            [57600, F_Earth_ENU_abs,  20], # 
+            [61200, F_Earth_ENU_abs,  20], # 
+            [64800, F_Earth_ENU_abs,  0],  #
+            [68400, F_none,  0]
+            ])
+
             
             
             
