@@ -169,7 +169,7 @@ class MRSmissionData():
     
     propaSettings = pd.DataFrame([
                     [0,     '-',      0.1,            0,        10,     'Keeping LLA postion at launchsite'],
-                    [1,     'DOP853',   1,            0,        60,     'LEO, auto-step size, no thrust, DOP853'],
+                    [1,     'DOP853',   60,            0,       1,     'LEO, auto-step size, no thrust, DOP853'],
                     [1,     'DOP853',   60,           1,        30,     'Hi-Res; high fidelity forces'],
                     [2,     'DOP853',   0.1,          1,        1,      '100 ms steps, DOP853']
                     ], 
@@ -407,6 +407,134 @@ class MRSmissionData():
             [68400, F_none,  0]
             ])
 
+  
+
+
+    class spacecraft():
+        
+       # name of spacecraft
+       name = 'MRS Demo Spacecraft'
+       
+       # list of spacecraft elements 
+       SCelements = np.array([
+                       ['stages', 1],
+                       ['SRB', 1],
+                       ['payload', 0],
+                       ], dtype=object)  
+       
+       # define optional static values used for fast trajectory computations
+       class staticValues():
+           mass = 1000. # [kg]
+           dragarea = 10. # [m^2]
+           Cd = 2.40 
+           Cr = 1.80
+           SRParea = 100
+       
+       
+       class stages():
+           
+           name = 'Saturn V (stages)'
+           
+           partsInit = np.array([
+                           # name, stagingTime, dryMass,     fuelMass,  dragArea
+                           ['S-IC',  5.,       133209,     2145798, 112],
+                           ['S-II',  12.,       40201,      443235,  79],
+                           ['S-IVB', 25,      14290,      107095,  34]
+                           ], dtype=object)  
+       
+           engines = np.array([
+                              # name,  description,  thrust SL, thrust VAC, fuel flow 100% 
+                               ['F1', 'S-IC engines', 6975716, 8000000,    2684.],
+                               ['J1', 'S-II engines', 486.2e3, 1028303,   245.82],
+                               ['J1', 'S-IVB engine', 486.2e3, 901.22e3,   214.06]
+                               ], dtype=object) 
+               
+           # Throttle settings for all parts
+           throttleInit = np.array([
+               # MET    Start   End     EngineType  EngineAmount,   Description
+               [ 0.0,   0.0,    -1,     0,          1,              'Ignition'],
+               [ 1.0,   1.0,    1.0,     0,          1,              'Full thrust'],
+               [ 5.0,   1.0,    -1,     1,          1,              'Full thrust'],
+               [10.20,  0.7,    -1,     1,          1,              'half power'   ],
+               [10.201, 1.0,    1.0,     1,          1,              'half power'   ],
+               [10.299, 0.5,    0,     1,          1,              'half power'   ],
+               [14.05,  1.0,    1.0,    2,          1,              'Ramp down'],
+               [20.0,   0.0,    0.0,     2,          1,              'Engines off']
+               ], dtype=object) 
+           
+           # Drag Coeffient 
+           C_D = np.array([
+                       # Random drag coeff, no reference! 
+                       #   Mach    CD AOA 0°
+                       [   0.,     0.25],
+                       [   0.15,   0.25],
+                       [   0.65,   0.29],
+                       [   0.8,    0.33],
+                       [   1.25,   0.62],
+                       [   1.40,   0.62],
+                       [   3.50,   0.32],
+                       [   5.00,   0.26],
+                       [   8.70,   0.24],
+                       [   9.00,   0.24],
+                       [  10.00,   0.24]]) 
+           
+           
+       class SRB():
             
+            name = 'SLS SRB'  
+            
+            partsInit = np.array([
+                            # name, stagingTime, dryMass,     fuelMass,  dragArea
+                            ['SRB',  132.,       99337,     626411, 10.81],
+                           ], dtype=object)  
+            
+            engines = np.array([
+                               # name,  description,  thrust SL, thrust VAC, fuel flow 100% 
+                                ['SRB', 'SRB', 14107703, 15815811,    6050.6],
+                                ], dtype=object) 
+          
+            throttleInit = np.array([
+                            # MET    Start   End     EngineType  EngineAmount,   Description
+                            [-20,      0.0,    -1,   0,          1,   ''],     
+                            [0,        0.0,    -1,   0,          1,   'Lets go'],    
+                            [0.3,      1.0,    -1,   0,          1,   ''],     # 
+                            [3.2,      0.985,  -1,   0,          1,   ''],     # 
+                            [6.3,      0.994,  -1,   0,          1,   ''],     # 
+                            [23.4,     0.998,  -1,   0,          1,   ''],     # 
+                            [26.4,     0.949,  -1,   0,          1,   ''],     # 
+                            [35.,      0.859,  -1,   0,          1,   ''],     # 
+                            [43.,      0.807,  -1,   0,          1,   ''],     # 
+                            [52.5,     0.790,  -1,   0,          1,   ''],     # 
+                            [70.,      0.885,  -1,   0,          1,   'SRB here!'],     # 
+                            [80.,      0.923,  -1,   0,          1,   ''],     # 
+                            [88.5,     0.924,  -1,   0,          1,   ''],     # 
+                            [94.5,     0.894,  -1,   0,          1,   ''],     # 
+                            [98.7,     0.854,  -1,   0,          1,   ''],     # 
+                            [100.8,    0.817,  -1,   0,          1,   ''],     # 
+                            [106.,     0.792,  -1,   0,          1,   ''],     # 
+                            [110.,     0.756,  -1,   0,          1,   ''],     # 
+                            [113.,     0.699,  -1,   0,          1,   ''],     # 
+                            [116.,     0.499,  -1,   0,          1,   ''],     # 
+                            [119,      0.220,  -1,   0,          1,   ''],     # 
+                            [124.,     0.040,  -1,   0,          1,   ''],     # 
+                            [126.2,    0.0,    -1,   0,          0,   ''],     # 
+                            ], dtype=object) 
+       
+            # Drag Coeffient 
+            C_D = np.array([
+                        # Random drag coeff, no reference! 
+                        #   Mach    CD AOA 0°
+                        [   0.,     0.25],
+                        [   0.15,   0.25],
+                        [   0.65,   0.29],
+                        [   0.8,    0.33],
+                        [   1.25,   0.62],
+                        [   1.40,   0.62],
+                        [   3.50,   0.32],
+                        [   5.00,   0.26],
+                        [   8.70,   0.24],
+                        [   9.00,   0.24],
+                        [  10.00,   0.24]])     
+                  
             
             

@@ -264,14 +264,9 @@ class Guidance():
                 # first call of segment should be at MET of segment start
                 if MET == self.gd.gElevTab[self.gElevPointer, I_MET]:
                     
-                    # go to previous guidance segment 
+                    # go to previous guidance segments 
                     self.gElevPointer -= 1
-                    # only use previous Heading segment if the current hasn't a start value either
-                    if np.isnan(self.gd.gHeadTab[self.gHeadPointer, [I_start_value,I_gradient]]).any():
-                        self.gHeadPointer -= 1
-                        use_previous_HeadPointer = 1
-                    else:
-                        use_previous_HeadPointer = 0
+                    self.gHeadPointer -= 1
                     
                     # get gVec using the previous segment
                     gVec_previousSegment = self.get_gVec(JDnow, y, MET)
@@ -279,11 +274,9 @@ class Guidance():
                     # get gVec elev/head in different frames
                     gVec_values = self.get_delta_gvec_to_vel(JDnow, y, gVec_previousSegment)
                     
-                    # update back to current guidance segment
+                    # update back to current guidance segments
                     self.gElevPointer += 1
-                    if use_previous_HeadPointer == 1:
-                        self.gHeadPointer += 1
-                        use_previous_HeadPointer = 0
+                    self.gHeadPointer += 1
                     
                     # store relevant value as start_value
                     if self.gd.gElevTab[self.gElevPointer, I_frame] == F_Earth_ENU_abs:
@@ -325,14 +318,9 @@ class Guidance():
                 # first call of segment should be at MET of segment start
                 if MET == self.gd.gHeadTab[self.gHeadPointer, I_MET]:
                     
-                    # go to previous guidance segment 
+                    # go to previous guidance segments 
                     self.gHeadPointer -= 1
-                    # only use previous Heading segment if the current hasn't a start value either
-                    if np.isnan(self.gd.gElevTab[self.gHeadPointer, [I_start_value,I_gradient]]).any():
-                        self.gHeadPointer -= 1
-                        use_previous_ElevPointer = 1
-                    else:
-                        use_previous_ElevPointer = 0
+                    self.gElevPointer -= 1
                     
                     # get gVec using the previous segment
                     gVec_previousSegment = self.get_gVec(JDnow, y, MET)
@@ -340,11 +328,9 @@ class Guidance():
                     # get gVec elev/head in different frames
                     gVec_values = self.get_delta_gvec_to_vel(JDnow, y, gVec_previousSegment)
                     
-                    # update back to current guidance segment
+                    # update back to current guidance segments
                     self.gHeadPointer += 1
-                    if use_previous_ElevPointer == 1:
-                        self.gElevPointer += 1
-                        use_previous_ElevPointer = 0
+                    self.gElevPointer += 1
                     
                     # store relevant value as start_value
                     if self.gd.gHeadTab[self.gHeadPointer, I_frame] == F_Earth_ENU_abs:
@@ -557,7 +543,7 @@ class Guidance():
         # Heading:
         # - F_SMx_abs
         
-        elif self.gd.gElevTab[self.gElevPointer, I_frame] == self.gd.gHeadTab[self.gElevPointer, I_frame] \
+        elif self.gd.gElevTab[self.gElevPointer, I_frame] == self.gd.gHeadTab[self.gHeadPointer, I_frame] \
             and self.gd.gElevTab[self.gElevPointer, I_frame] >= F_SM0_abs \
             and self.gd.gElevTab[self.gElevPointer, I_frame] <= F_SM9_abs:
             
@@ -571,7 +557,7 @@ class Guidance():
         # no valid combination of frames for elevation and heading 
         else:
             print('MRS:\t\tERROR get_gVec(): no valid combination of heading/elevation frames.')
-
+           
             # calc guidance vector 
             gVec = y[:3]/np.linalg.norm(y[:3])
             
@@ -671,12 +657,13 @@ class Guidance():
         b = ENU[:,2].dot(self.ENU_liftoff[:,2])
         c = np.cos(gElevFrame)
         
-        # round values; makes sure to maintain a**2+b**2 >= c**2
-        a = round(a,10)
-        b = round(b,10)
+        # make sure to get valid values for sqrt() 
+        d = a**2+b**2-c**2
+        if d<0.:
+            d = 0.
         
         # calculate elevation in local ENU frame
-        ENU_elev = 2*np.arctan((b-np.sqrt(a**2+b**2-c**2))/ (a+c))
+        ENU_elev = 2*np.arctan((b-np.sqrt(d))/ (a+c))
         
         # calc v vector using v_projected and elevation     
         gVec = gVec_projected * np.cos(ENU_elev) + ENU[:,2] * np.sin(ENU_elev)

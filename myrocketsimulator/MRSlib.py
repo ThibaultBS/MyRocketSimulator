@@ -43,6 +43,7 @@ AU = 149597870700. # astronomical unit [m]
 EARTH_ROT_SPEED = 7292115.1467e-11 # [rad/s]
 SRP1AU =  4.5344321e-6 #  [N/m^2] solar flux radiation pressure at one AU
 R = 287.052874 # specific gas constant dry air
+G0 = 9.80665 # standard Earth gravity
 
 # Radius values for ecplise + tide calculations
 SUN_RADIUS = 696340e3 # [m]
@@ -104,11 +105,11 @@ class MRSstaticSpacecraft():
         # if spacecraft data is provided
         if SCD:
             self.SCD = SCD
-            self.spacecraftname = self.SCD.name
+            self.name = self.SCD.name
         # otherwise, use default values
         else:
             self.SCD = defaultSpacecraft()
-            self.spacecraftname = 'MRS Default Spacecraft'
+            self.name = 'MRS Default Spacecraft'
 
         # spacecraft mode (active/static)
         self.mode = 'static'
@@ -147,6 +148,9 @@ class MRSstaticSpacecraft():
         # make empty list
         self.eventsDF = pd.DataFrame(index = range(0), columns=['MET','eventType'])
         return self.eventsDF
+    
+    def get_METvalues(self):
+        return np.array([])
 
 
 class MRSstaticGuidance():
@@ -284,6 +288,7 @@ class MRSmission():
         self.DEephemeris = 'DE421' # alternative: DE440
         self.OE_TEME = 0 # if 0: OE calculated in ICRF, if 1: OE calc. in TEME
         self.fastEphemeris = 0 # if set to 1, planet positions will be fixed 
+        self.forceMETactive = 0 # use METactive times for integrator even if SC is static 
                                
         # space weather settings
         self.use_spaceweather = 1
@@ -339,6 +344,8 @@ class MRSmission():
             self.OE_TEME = self.MD.OE_TEME 
         if hasattr(self.MD, 'fastEphemeris'):
             self.fastEphemeris = self.MD.fastEphemeris 
+        if hasattr(self.MD, 'forceMETactive'):
+            self.forceMETactive = self.MD.forceMETactive 
         if hasattr(self.MD, 'use_spaceweather'):
             self.use_spaceweather = self.MD.use_spaceweather 
         if hasattr(self.MD, 'f107s'):
@@ -364,24 +371,20 @@ class MRSmission():
 
         Parameters
         ----------
-        missionname : string
-            Relative path to the missin file (ending with .py)
+        missionname : string or mission data class
+            Relative path to the missin file (ending with .py) OR
+            mission data class provided by user
         checkmission : True/False, optional
              If mission shoudl already be checked. The default is True.
 
         """
-
-
-        # save + print missionname
-        self.missionname = missionname
-        print('MRS:\t\tLoading mission object \''+self.missionname+'\'.')
 
         # mission variables
         self.MDloaded = 0 # 1 if mission data is loaded
         self.MDvalid = 0 # 1 if mission data is valid
 
 
-        if missionname != 'defaultMRSmission':
+        if missionname != 'defaultMRSmission' and isinstance(missionname, str):
             # load mission data from external file
             try:
 
@@ -415,8 +418,13 @@ class MRSmission():
                 print('MRS:\t\tLeaving load_mission().')
                 return None
 
-        else:
+        elif missionname == 'defaultMRSmission' and isinstance(missionname, str):
+            # load default mission
             self.MD = defaultMRSmission.MRSmissionData
+            
+        else:
+            # mission data provided by user 
+            self.MD = missionname
 
 
         print('MRS:\t\tMission \''+self.MD.name+'\' loaded.')
@@ -565,10 +573,16 @@ class MRSmission():
 
         # if launchpad is provided, calc local ENU for time of lifotff (determined by change of propagation mode)
         if isinstance(self.MD.launchsite_LLA, np.ndarray):
-            # loop through segments
+            # initialize SH degree for launchsite
+            lmax_launchsegment = 0
+            
+            # per default, launch is assumed to be at t0_JD
+            self.MD.t0_JD_liftoff = self.MD.t0_JD
+            
+            # loop through segments to find actual launch MET (and update t0_JD_liftoff)
             for i in range(len(self.MD.missionSegments)):
                 # find first occurence of propagationmode = 1
-                if self.MD.propaSettings.loc[self.MD.missionSegments.configID[i],'mode'] == 1:
+                if self.MD.propaSettings.loc[self.MD.missionSegments.configID[i],'mode'] >= 1:
                     # calc JD for given MET
                     self.MD.t0_JD_liftoff = self.MD.t0_JD + self.MD.missionSegments.MET[i] * SEC2DAYS
                     # store lmax of launch segment
@@ -593,13 +607,20 @@ class MRSmission():
         # LOAD SPACECRAFT
         #
 
+        # MET values of active SC
+        self.METactive = np.array([])
+
         # check that spacecraft data is available in mission data
         if hasattr(self.MD, 'spacecraft'):
             # if it got a SC element list, it's a active spacecraft
             if hasattr(self.MD.spacecraft, 'SCelements'):
                 print('MRS:\t\tLoading '+self.MD.spacecraft.name+' as active spacecraft.')
                 self.SC = SpaceCraft(self.MD.spacecraft)
-            # only static data provided (hopefully, otherwhise it crashes later, b/c not checked at the moment)
+               
+                # get action times of the spacecraft
+                self.METactive = np.append(self.METactive, self.SC.get_METvalues())
+            
+           # only static data provided (hopefully, otherwhise it crashes later, b/c not checked at the moment)
             else:
                 print('MRS:\t\tLoading '+self.MD.spacecraft.name+' as static spacecraft.')
                 self.SC = MRSstaticSpacecraft(self.MD.spacecraft)
@@ -616,6 +637,12 @@ class MRSmission():
         if hasattr(self.MD, 'guidanceData'):
             print('MRS:\t\tLoading guidance object '+self.MD.guidanceData.name+'.')
             self.GO = Guidance(self.MD.guidanceData)
+            
+            # get action times of guidance
+            self.METactive = np.append(self.METactive, self.GO.gd.gElevTab[:,0])
+            self.METactive = np.append(self.METactive, self.GO.gd.gHeadTab[:,0])   
+            # sort + get unique values
+            self.METactive= np.unique(self.METactive)
             
         # no guidance provided
         else:
@@ -782,7 +809,7 @@ class MRSmission():
                     # get MET value
                     self.METvec = np.array([self.MD.missionSegments['MET'][i]])
 
-                # if not in last segment, generate MET vector
+                # if not in last segment, define MET start and end times
                 else:
                     # if starting from statevector check t0_MET
                     if self.MD.launchtype == 0:
@@ -791,6 +818,7 @@ class MRSmission():
                             # go to next segment
                             continue
                         # if reference time is before current segment start time
+                        # (shoulnd'n happen)
                         if self.MD.t0_MET < self.MD.missionSegments['MET'][i]:
                             METsegmentstart = self.MD.missionSegments['MET'][i]
                         # otherwise set starttime to provided t0_MET
@@ -799,44 +827,10 @@ class MRSmission():
                     # not starting from statevector, use time from segment
                     else:
                         METsegmentstart = self.MD.missionSegments['MET'][i]
-
-                    # make timevector (MET) for segment
-                    # starttime: starttime of segment
-                    # endtime: starttime of following segment
-                    # step size: taken from propagation settings for this segment
-                    self.METvec = np.arange(
-                        METsegmentstart,
-                        self.MD.missionSegments['MET'][i+1],
-                        self.MD.propaSettings['stepsizePropa'][self.propaID])
-                    # add starttime of next segment as final value of current segment
-                    self.METvec = np.append(self.METvec,self.MD.missionSegments['MET'][i+1])
-
-
-
-                ###
-                ### PREPARE DATA LOGGING
-                ###
-
-                # make vector when to log
-                self.LOGvec = np.zeros(len(self.METvec))
-                self.LOGvec[0::int(self.MD.propaSettings['downsampleLog'][self.propaID])] = 1
-
-                # make sure not to deactivate the logging of last segment
-                # (only one value logged), therefore >1
-                if len(self.LOGvec)>1:
-                    self.LOGvec[-1] = 0 # last one is not logged, will be taken
-                                        # care of in following segment
-
-                # make temporary dataframe for logging
-                self.make_TempDF(int(np.sum(self.LOGvec)))
-
-                # write segment properties to dataframe
-                self.TempDF['segmentID'] = self.segmentID
-                self.TempDF['segmentType'] = self.segmentType
-                self.TempDF['configID'] = self.propaID
-                self.TempDF['propaMode'] = self.propaMode
-                self.TempDF['forcesID'] = self.forcesID
-                self.TempDF['activeSC'] = self.activeSC
+                    
+                    # save segment MET start and end times
+                    self.t_span = np.array([METsegmentstart, self.MD.missionSegments['MET'][i+1]])
+                  
 
                 ###
                 ### LOAD SPACE WEATHER (for date at segment start)
@@ -862,12 +856,11 @@ class MRSmission():
 
                     # save as current atmosModel
                     self.atmosModel = 'nrlmsise00'
-                    self.TempDF['atmosModel'] = self.atmosModel
-
+                    
                 # no atmos model defined
                 else:
                     self.atmosModel = '-'
-                    self.TempDF['atmosModel'] = self.atmosModel
+                    
 
                 ###
                 ### GRAVITY
@@ -891,14 +884,22 @@ class MRSmission():
                 # in last statevec & exit
                 if i==len(self.MD.missionSegments)-1:
 
+                    # make temporary dataframe for logging
+                    self.make_TempDF(int(1))
+
                     # write data to TempDF
                     self.TempDF['JD_TBD'] = self.JD
                     self.TempDF['MET'] = self.METvec[0]
                     self.TempDF[['x','y','z','vx','vy','vz']] = self.statevec
-
-                    # overwrite segment ID (otherwise it's a new segment and
+                    # use previous segmentID 
                     # leads to bad visualization with the MRSvislib
-                    self.TempDF['segmentID'] -= 1
+                    self.TempDF['segmentID'] = self.segmentID - 1 
+                    self.TempDF['segmentType'] = self.segmentType
+                    self.TempDF['configID'] = self.propaID
+                    self.TempDF['propaMode'] = self.propaMode
+                    self.TempDF['forcesID'] = self.forcesID
+                    self.TempDF['activeSC'] = self.activeSC
+                    self.TempDF['atmosModel'] = self.atmosModel
 
                     # finalize missionDF
                     self.missionDF = pd.concat([self.missionDF, self.TempDF], ignore_index=True)
@@ -913,17 +914,12 @@ class MRSmission():
                     # propagate launchsite position in GCRF
                     self.propagate_Mode0()
 
-                # free run mode propagation
+                # integration of trajectory
                 elif self.propaMode==1:
 
-                    # propagate without thrust/guidance control
+                    # propagate with optional thrust/guidance control
                     self.propagate_Mode1()
-
-                # step-wise propagation
-                elif self.propaMode==2:
-
-                    # propagate SC
-                    self.propagate_Mode2()
+             
 
                 # unknown mode
                 else:
@@ -931,17 +927,6 @@ class MRSmission():
                     segment processing.')
                     # exit segment loop
                     break
-
-
-                ###
-                ### POST-PROPAGATION IN-SEGMENT TODOS
-                ###
-
-                # append segmentDF to missionDF
-                self.missionDF = pd.concat([self.missionDF, self.TempDF], ignore_index=True)
-
-                
-
 
             ###
             ### APPLY DELTA-V MANEUVER
@@ -979,7 +964,7 @@ class MRSmission():
         ###
 
         # delete temp vars
-        self.del_tempVars()
+        self.del_tempVars() 
 
         # end timer
         self.toc = time.time() - tic
@@ -1063,58 +1048,86 @@ class MRSmission():
         None
 
         """
+        # get statevec at (theoretical) time of launch
+        y = self.transform_LLAgeodetic_GCRF(self.MD.t0_JD_liftoff, self.MD.launchsite_LLA)
+        
+        # get local pressure; assume its fixed during the whole time on ground
+        _, Pa, _, _ = self.get_atmos(self.MD.t0_JD_liftoff, y[:3])
+        
+        # loop through METactive for spacecraft action items to happen
+        # at the right time (for visualization and eventDF of the SC)
+        METactive = self.METactive * 1.0
+        # reduce METactive to relevant MET range (defined by t_span)
+        METactive = np.delete(METactive, METactive<self.t_span[0])
+        METactive = np.delete(METactive, METactive>=self.t_span[1])
+       
+        for i in range(len(METactive)):
+            # call SC
+            _, _, _ = self.SC.get_ThrustMassOther(METactive[i], Pa, verbose='v')
+        
+        # get time settings for logging of statevec
+        LOGstepsize = self.MD.propaSettings['stepsizePropa'][self.propaID]
+        LOGstart = self.t_span[0]
+        LOGend = self.t_span[1]
+        
+        # define MET values for logging
+        METlog = np.arange(LOGstart, LOGend, LOGstepsize)
+        
+        # make temporary log dataframe
+        self.make_TempDF(int(len(METlog)))
 
-        # number of MET times required to be calculated
-        numSteps = self.METvec.shape[0]
-
-        # pointer in TempDF
-        TempDFpointer = 0
-
-        # loop through steps
-        for i in range(numSteps):
-
+        # write segment properties to dataframe
+        self.TempDF['segmentID'] = self.segmentID
+        self.TempDF['segmentType'] = self.segmentType
+        self.TempDF['configID'] = self.propaID
+        self.TempDF['propaMode'] = self.propaMode
+        self.TempDF['forcesID'] = self.forcesID
+        self.TempDF['activeSC'] = self.activeSC
+        self.TempDF['atmosModel'] = self.atmosModel
+        
+        for i in range(len(METlog)):
             # current JD
-            JDnow = self.MD.t0_JD + (self.METvec[i] - self.MD.t0_MET) * SEC2DAYS
+            JDnow = self.MD.t0_JD + (METlog[i] - self.MD.t0_MET) * SEC2DAYS
 
             # get current statevec
             statevec = self.transform_LLAgeodetic_GCRF(JDnow, self.MD.launchsite_LLA)
 
-            # call spacecraft-thrust-function to display its output
-            _, _, _ = self.SC.get_ThrustMassOther(self.METvec[i], 0, verbose='v')
-
-            # save to logfile if needed
-            if self.LOGvec[i]==1:
-                self.TempDF.loc[TempDFpointer, ['MET']] = self.METvec[i]
-                self.TempDF.loc[TempDFpointer, ['JD_TBD']] = JDnow
-                self.TempDF.loc[TempDFpointer, ['x','y','z','vx','vy','vz']] = statevec
-                # increase pointer for next row
-                TempDFpointer += 1
-
+            # save to logfile
+            self.TempDF.loc[i, ['MET']] = METlog[i]
+            self.TempDF.loc[i, ['JD_TBD']] = JDnow
+            self.TempDF.loc[i, ['x','y','z','vx','vy','vz']] = statevec
+    
+        # append segmentDF to missionDF
+        self.missionDF = pd.concat([self.missionDF, self.TempDF], ignore_index=True)
+            
+        # reset TempDF (because it might be needed to be appended to missionDF 
+        # outside of this function)
+        self.make_TempDF(int(0))
+        
         # update state final vector
-        self.statevec = statevec
-        self.JD = self.MD.t0_JD + (self.MD.missionSegments['MET'][self.segmentID+1] - self.MD.t0_MET) * SEC2DAYS
+        self.JD = self.MD.t0_JD + (self.t_span[1] - self.MD.t0_MET) * SEC2DAYS
+        self.statevec = self.transform_LLAgeodetic_GCRF(self.JD, self.MD.launchsite_LLA)
 
         return None
 
 
-
+    
     def propagate_Mode1(self):
         """
         Internal function.
-        Propagates the spaecraft within the given mission segment; auto-step
-        size control by the given integrator.
-        To be used with passive spacecrafts.
-        Not recommended for active spacecrafts with thrust and guidance.
-        Resulting state vectors are stored to TempDF and (in run_mission())
-        to the missionDF.
-
+        Propagates the state vector for the duration of a mission segment.
+        If METactive contains values (i.e., because an active spacraft and/or
+        guidance is loaded), the integration takes place between METactive values.
+        
+        State vectors are extracted as "dense output" from the integrator solution 
+        and stored in the missionDF. 
 
         Returns
         -------
         None
 
         """
-
+        
         # special function to serve as crash event on Earth for integrator termination
         def EndFlightEvent(t, y):
             return self.get_EarthAlt(t, y)
@@ -1124,151 +1137,117 @@ class MRSmission():
 
         # prepare solve_ivp variables
         fun = self.get_slopes
-        t_span = np.array([self.MD.missionSegments['MET'][self.segmentID],
-                           self.MD.missionSegments['MET'][self.segmentID+1]])
-        y0 = self.statevec
         method = self.MD.propaSettings['method'][self.propaID] # get from dataframe
         dense_output = True
         max_step = self.integrator_max_step
         atol = self.integrator_atol
         rtol = self.integrator_rtol
-        first_step = 3
-
-        # perform solve_ivp
-        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html
-        sol = solve_ivp(fun, t_span, y0, method, dense_output = dense_output,
-                        events=EndFlightEvent, first_step=first_step,
-                        max_step=max_step, atol=atol, rtol=rtol)
-
-        # METs at which logging is required; don't consider last MET, as not indexed by LOGvec
-        METlog = self.METvec[self.LOGvec==1]
-
-        # update final state vector
-        self.statevec = sol.y.T[-1] # last computed state vector
-        self.JD = self.MD.t0_JD + (sol.t.T[-1]  - self.MD.t0_MET) * SEC2DAYS
-
-        # check if rocket crashed into Earth
-        if sol.t_events[0].size>0:
-            print('MRS:\t\tWARNING: Collision with Earth, mission ended.')
-            # delete METlog timestampe after crash
-            METlog = METlog[METlog<sol.t_events[0][0]]
-            # add MET for crash
-            METlog = np.append(METlog, sol.t_events[0][0])
-            # adjust length of TempDF
-            self.TempDF = self.TempDF.head(len(METlog))
-            # save crash
-            self.eventCrashed = 1
-            # append to eventsDF
-            self.add_event(self.JD, self.statevec, 'EarthCollision')
-
-        # get dense data for required METs
-        sol_statevecs = sol.sol(METlog)
-
-        # save to TempDF
-        self.TempDF['MET'] = METlog
-        self.TempDF['JD_TBD'] = self.MD.t0_JD + (METlog - self.MD.t0_MET) * SEC2DAYS
-        self.TempDF[['x','y','z','vx','vy','vz']] = sol_statevecs.T
-
-        self.sol = sol
-
-        return None
-
-    def propagate_Mode2(self):
-        """
-        Internal function.
-        Propagates the spaecraft within the given mission segment; fixed step
-        size (provided in misison data propaSettings)
-        To be used with active spacecrafts.
-        Not recommended for static spacecrafts.
-        Resulting state vectors are stored to TempDF and (in run_mission())
-        to the missionDF.
-
-
-        Returns
-        -------
-        None
-
-        """
-
-        # save first statevector
-        self.TempDF.loc[0,['MET']] = self.METvec[0]
-        self.TempDF.loc[0,['JD_TBD']] = self.MD.t0_JD + (self.METvec[0] - self.MD.t0_MET) * SEC2DAYS
-        self.TempDF.loc[0,['x','y','z','vx','vy','vz']] = self.statevec
-
-        # special function to serve as crash event on Earth for integrator termination
-        def EndFlightEvent(t, y):
-            return self.get_EarthAlt(t, y)
-        # end mission if crash occurs
-        EndFlightEvent.terminal  = True
-        EndFlightEvent.direction = -1.
-
-        # prepare fixed solve_ivp variables
-        fun = self.get_slopes
-        #statevec = self.statevec
-        method = self.MD.propaSettings['method'][self.propaID]
-        dense_output = True
-        max_step = self.integrator_max_step
-        atol = self.integrator_atol
-        rtol = self.integrator_rtol
-        first_step = 3 # TODO: needs to be set to value equal (or less) to step size of mode 2
-
-
-        # number of MET times required to be calculated
-        numSteps = self.METvec.shape[0]
-
-        # pointer in TempDF; skip first row because alrady written
-        TempDFpointer = 1
-
-        # loop through steps
-        for i in range(numSteps-1):
-
-            # prepare solve_ivp variables
-            t_span = np.array([self.METvec[i], self.METvec[i+1]])
-            y0 = self.statevec
-
-            # set fixed pointer for spacecraft
-            self.SC.set_fixedThrottlePointer(self.METvec[i])
+        t_span = self.t_span * 1
+        
+        # if SC is active or active MET are forced
+        if self.activeSC or self.forceMETactive:
+            # copy of METactive values for the whole mission
+            METactive = self.METactive * 1.0
+            # reduce METactive to relevant MET range (defined by t_span)
+            METactive = np.delete(METactive, METactive<t_span[0])
+            METactive = np.delete(METactive, METactive>t_span[1])
+            # add t_span values
+            METactive = np.append(t_span[0], METactive)
+            METactive = np.append(METactive, t_span[1])
+            # remove duplicate values
+            METactive = np.unique(METactive)
+        else:
+            METactive = t_span
+        
+        # loop through MET active ranges
+        for i in range(len(METactive)-1):
+       
+            # define new time range
+            t_span_active = np.array([METactive[i],METactive[i+1]])
             
-            # update guidance
-            _ = self.GO.get_guidance(self.MD.t0_JD + (self.METvec[0] - self.MD.t0_MET) * SEC2DAYS,\
-                                     y, self.METvec[0], mode='TrueMET')
-
+            # update state vector for integrator
+            y0 = self.statevec
+            
+            if self.activeSC: 
+                # set fixed pointer for spacecraft
+                self.SC.set_fixedThrottlePointer(METactive[i])
+                
+                # update guidance
+                _ = self.GO.get_guidance(self.MD.t0_JD + (METactive[i] - self.MD.t0_MET) * SEC2DAYS,\
+                                         y0, METactive[i], mode='TrueMET')
+            
             # perform solve_ivp
             # https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html
-            sol = solve_ivp(fun, t_span, y0, method, dense_output = dense_output,
-                            events=EndFlightEvent, first_step=first_step,
+            sol = solve_ivp(fun, t_span_active, y0, method, dense_output = dense_output,
+                            events=EndFlightEvent, 
                             max_step=max_step, atol=atol, rtol=rtol)
-
+  
             # update state vector
             self.statevec = sol.y.T[-1] # last computed state vector
             self.JD = self.MD.t0_JD + (sol.t.T[-1]  - self.MD.t0_MET) * SEC2DAYS
-
+            
+            # get time settings for logging
+            LOGstepsize = self.MD.propaSettings['stepsizePropa'][self.propaID]
+            LOGstart = np.ceil(t_span_active[0]/LOGstepsize)*LOGstepsize
+            # substract 1e-10 to make sure that LOGend is not equal to end of MET range
+            LOGend = np.floor((t_span_active[1]-1e-10)/LOGstepsize)*LOGstepsize
+        
+            # define MET values for logging
+            METlog = np.arange(LOGstart, LOGend+LOGstepsize, LOGstepsize)
+            
+            # make temporary log dataframe
+            self.make_TempDF(int(len(METlog)))
+   
             # check if rocket crashed into Earth
             if sol.t_events[0].size>0:
                 print('MRS:\t\tWARNING: Collision with Earth, mission ended.')
+                # delete METlog timestampe after crash
+                METlog = METlog[METlog<sol.t_events[0][0]]
+                # add MET for crash
+                METlog = np.append(METlog, sol.t_events[0][0])
+  
+                # re-adjust length of TempDF
+                self.make_TempDF(int(len(METlog)))
+                
                 # save crash
                 self.eventCrashed = 1
                 # append to eventsDF
                 self.add_event(self.JD, self.statevec, 'EarthCollision')
-                # shorten TempDF
-                self.TempDF = self.TempDF.head(TempDFpointer+1)
 
-            # save to logfile if needed; always one ahead, because the statevector for the following MET is calculated
-            if self.LOGvec[i+1]==1 or self.eventCrashed==1:
-                self.TempDF.loc[TempDFpointer, ['MET']] = sol.t.T[-1]
-                self.TempDF.loc[TempDFpointer, ['JD_TBD']] = self.JD
-                self.TempDF.loc[TempDFpointer, ['x','y','z','vx','vy','vz']] = self.statevec
-                # increase pointer for next row
-                TempDFpointer += 1
+            # retrieve only dense output and store it if required
+            if len(self.TempDF)>0:
+                # get dense data for required METs
+                sol_statevecs = sol.sol(METlog)
+        
+                # write segment properties to dataframe
+                self.TempDF['segmentID'] = self.segmentID
+                self.TempDF['segmentType'] = self.segmentType
+                self.TempDF['configID'] = self.propaID
+                self.TempDF['propaMode'] = self.propaMode
+                self.TempDF['forcesID'] = self.forcesID
+                self.TempDF['activeSC'] = self.activeSC
+                self.TempDF['atmosModel'] = self.atmosModel
+        
+                # save to TempDF
+                self.TempDF['MET'] = METlog
+                self.TempDF['JD_TBD'] = self.MD.t0_JD + (METlog - self.MD.t0_MET) * SEC2DAYS
+                self.TempDF[['x','y','z','vx','vy','vz']] = sol_statevecs.T
+        
+                # append segmentDF to missionDF
+                self.missionDF = pd.concat([self.missionDF, self.TempDF], ignore_index=True)
+                
+            # reset TempDF (because it's needed to be appended to missionDF outside
+            # of this function)
+            self.make_TempDF(int(0))
 
+            # reset throttle profile pointers of SC
+            self.SC.reset_fixedThrottlePointer()
+          
             # exit in case of crash
             if self.eventCrashed == 1:
                 # exit steps-loop
                 break
-
-        # clear spacecraft pointer
-        self.SC.reset_fixedThrottlePointer()
-
+            
         return None
 
     def get_EarthAlt(self, MET, y):
@@ -1383,7 +1362,7 @@ class MRSmission():
         if self.activeSC:
 
             # get temperature/pressure/density/M1
-            atmosvalues = self.get_atmos(JDnow, y[:3])
+            atmosvalues = self.get_atmos(JDnow, y[:3]) # T, Pa, Rho, M1
 
             # get spacecraft properties
             thrustForce, SCmass, _ = self.SC.get_ThrustMassOther(MET, \
@@ -1392,13 +1371,16 @@ class MRSmission():
             # get guidance
             thrustVector = self.GO.get_guidance(JDnow, y, MET, mode=mode)
 
-            # acceleration by TVC
-            accThrust = thrustVector * thrustForce / SCmass
+            # acceleration by TVC; only if SC as a mass
+            if SCmass:
+                accThrust = thrustVector * thrustForce / SCmass
+            else:
+                accThrust = 0
         else:
             accThrust = 0
 
         # calculate drag acceleration if required
-        if self.dragOn:
+        if self.dragOn and SCmass>0:
             # if active spacecraft:
             if self.activeSC:
 
@@ -1409,7 +1391,8 @@ class MRSmission():
 
                 # calc drag acceleration
                 accDrag = self.SC.get_DragF(MET, vrel, rho, mach) / SCmass
-
+                
+                
             else:
                 # dynPress comes as a vector in direction of velocity
                 accDrag = - self.get_dynPress(MET, y, JDnow) * \
@@ -2900,7 +2883,7 @@ class MRSmission():
         # transform back into original frame and return statevec
         return np.hstack([y[:3], VNB.dot(velVNB)])
 
-    def get_FPAHAVEL_EF(self, JDnow, y):
+    def get_FPAHAVEL_EF(self, JDnow, y, frame='TOD'):
         """
         Internal function. Vectorized.
         Returns velocity vector described w.r.t. to fixed Earth frame (EF).
@@ -2911,6 +2894,10 @@ class MRSmission():
             Current Julian Date (TBD).
         y : array of floats
             State vector in GCRF.
+        frame : string
+            Frame in which to calculate the values. Default is 'TOD':
+                TOD: True of Date; round Earth
+                WGS84: elliptical Earth
 
         Returns
         -------
@@ -2948,14 +2935,14 @@ class MRSmission():
         yEF[:,3:] -= np.cross(EARTH_ROT_SPEED * earthRotAxisGCRF, yEF[:,:3])
 
         # get FPA / HA
-        FPA, HA = self.get_FPAHA(JDnow, yEF, frame='Earth')
+        FPA, HA = self.get_FPAHA(JDnow, yEF, frame=frame)
 
         # EF vel
         EFVEL = np.linalg.norm(yEF[:,3:], axis=1)
 
         return np.squeeze(FPA), np.squeeze(HA), np.squeeze(EFVEL)
 
-    def get_FPAHA(self, JDnow, y, frame='Earth'):
+    def get_FPAHA(self, JDnow, y, frame='TOD'):
         """
         Internal function. Vectorized.
         Returns FPA/HA in frame of provided statevectors. In case planet Earth
@@ -2968,7 +2955,7 @@ class MRSmission():
         y : array of floats
             State vector in local frame (GCRF for Earth)
         frame : string, optional
-            Frame in which FPA/HA are calculated. The default is 'Earth' 
+            Frame in which FPA/HA are calculated. The default is 'TOD' (round Earth) 
 
         Returns
         -------
@@ -2983,9 +2970,12 @@ class MRSmission():
         if y.shape == (6,):
             y = np.expand_dims(y, axis=0)
 
-        if frame == 'Earth':
+        if frame == 'TOD':
             # get local ENU values for Earth
-            ENU = self.get_ENUvec_Earth(JDnow, y)
+            ENU = self.get_ENUvec_Earth(JDnow, y, frame='TOD')
+        elif frame == 'WGS84':
+             # get local ENU values for Earth
+             ENU = self.get_ENUvec_Earth(JDnow, y, frame='WGS84')
         elif frame == 'launchsite':
             ENU = self.ENU_liftoff * 1.0
         else:
@@ -3232,7 +3222,7 @@ class MRSmission():
 
         return None
 
-    def add_event(self, JDnow, y, eventType):
+    def add_event(self, JDnow, y=np.zeros(6), eventType=''):
         """
         Internal function.
         Appends event statevec and name to eventsDF.
@@ -3395,13 +3385,21 @@ class MRSmission():
 
 
 
-            # EF velocity/HA/FPA
+            # EF velocity/HA/FPA (round Earth / TOD)
             elif datatype == 'EarthFixedFPAHAvel':
-                print('MRS:\t\tAdding FPA/HA/VEL (w.r.t. to Earth surface) to dataframe.')
+                print('MRS:\t\tAdding FPA/HA/VEL (w.r.t. to round Earth surface) to dataframe.')
                 FPA, HA, EFVEL = self.get_FPAHAVEL_EF(JDs, statevecs)
                 DF['EarthFixedFPA'] = FPA * RAD2DEG
                 DF['EarthFixedHA']  = HA * RAD2DEG
                 DF['EarthFixedVEL'] = EFVEL
+                
+            # EF velocity/HA/FPA (elliptical Earth, WGS84)
+            elif datatype == 'EarthWGS84FixedFPAHAvel':
+                print('MRS:\t\tAdding FPA/HA/VEL (w.r.t. to elliptical Earth surface) to dataframe.')
+                FPA, HA, EFVEL = self.get_FPAHAVEL_EF(JDs, statevecs, frame='WGS84')
+                DF['EarthWGS84FixedFPA'] = FPA * RAD2DEG
+                DF['EarthGS84FixedHA']  = HA * RAD2DEG
+                DF['EarthGS84FixedVEL'] = EFVEL
 
             # dyn. pressure
             elif datatype == 'dynPress':
@@ -3464,16 +3462,24 @@ class MRSmission():
                     continue
 
                 if self.SC.mode == 'static':
-                    print('MRS:\t\tERROR: mission has only static spacecarft; skipping active spacecraft data.')
-                    #continue
+                    print('MRS:\t\tERROR: mission has only static spacecraft; skipping active spacecraft data.')
+                    continue
+
+                if not 'atmosRho' in DF.columns:
+                    DF = self.expand_DF(['EarthAtmos'], DF)
 
                 print('MRS:\t\tAdding active spacecraft values to dataframe.')
-
+                
                 for i in range(lenDF):
                     SCthrust, SCmass, returnVals = \
                         self.SC.get_ThrustMassOther(DF.MET[i], pa=DF.atmosPa[i], verbose='')
                     DF.loc[i,['SC_active_Thrust', 'SC_active_Mass']] = SCthrust, SCmass
-
+                   
+                    if SCmass:
+                        DF.loc[i,['SC_active_TWR', 'SC_active_acc']] = SCthrust/(SCmass*G0), SCthrust/SCmass
+                    else: 
+                        DF.loc[i,['SC_active_TWR', 'SC_active_acc']] = 0., 0.
+                        
             # atmospheric drag
             elif datatype == 'DragForce':
 
@@ -3491,10 +3497,11 @@ class MRSmission():
 
                     # check if active or static SC
                     if DF.activeSC[i]:
-                        DF.loc[i,'DragF'] = self.SC.get_DragF(DF.MET[i],\
+                       
+                        DF.loc[i,'DragF'] = np.linalg.norm(self.SC.get_DragF(DF.MET[i],\
                                                               DF.EarthFixedVEL[i],\
                                                               DF.atmosRho[i],\
-                                                              DF.atmosM1[i])
+                                                              DF.atmosM1[i]))
                     # static
                     else:
                         DF.loc[i,'DragF'] = DF.dynPress[i] * DF.SC_static_AreaCd[i]
@@ -4061,6 +4068,8 @@ class MRSmission():
             # skip if eventType already present in eventsDF
             if eventType in self.eventsDF.eventType.to_numpy():
                 continue
+            
+            JDevent = 0
 
             # get JD time for given eventType
             if eventType == 'Closest2Earth':
@@ -4070,22 +4079,22 @@ class MRSmission():
 
                 JDevent = self.find_EventTime(0,'min','EarthAlt', eventType)
 
-            elif eventtype == 'FartestFromEarth':
+            elif eventType == 'FartestFromEarth':
 
                 if not 'EarthAlt' in self.missionDF.columns:
                     DF = self.expand_DFname(['EarthLLA'])
 
-                JDevent = find_EventTime(0,'max','EarthAlt', eventType)
+                JDevent = self.find_EventTime(0,'max','EarthAlt', eventType)
 
             else:
-                print('MRS:\t\tERROR in get_EventList(): unknown kind of event type requested: ', eventtype)
+                print('MRS:\t\tERROR in get_EventList(): unknown kind of event type requested: ', eventType)
 
             # in case the event was found, add it to eventsDF
-            if JDevent:
+            if JDevent != 0:
                 self.add_event(JDevent, np.zeros(6), eventType)
 
         # add MET values; round due to resolution of JD values
-        self.eventsDF['MET'] = round((self.eventsDF['JD_TBD'] - self.MD.t0_JD) / SEC2DAYS, 4)
+        self.eventsDF['MET'] = round((self.eventsDF['JD_TBD'].astype(float) - self.MD.t0_JD) / SEC2DAYS, 4)
 
         # add event list from mission file
         if hasattr(self.MD, 'missionEvents'):
@@ -4095,11 +4104,14 @@ class MRSmission():
             self.eventsDF = self.eventsDF.append(self.MD.missionEvents[['MET','JD_TBD','eventType']], ignore_index=True)
 
         # get spacecraft events
-        SCevents = self.SC.get_EventsList()
+        SCevents = pd.DataFrame(self.SC.get_EventsList(), columns=['MET', 'eventType'])
         # add JD to spacecraft events
         SCevents['JD_TBD'] = self.MD.t0_JD + (SCevents.MET - self.MD.t0_MET) * SEC2DAYS
         # add to eventsDF
         self.eventsDF = self.eventsDF.append(SCevents, ignore_index=True)
+
+        # clean duplicates using JD_TBD
+        self.eventsDF = self.eventsDF.drop_duplicates(subset=['JD_TBD'])
 
         # sort event list by JD
         self.eventsDF = self.eventsDF.sort_values(by=['JD_TBD']).reset_index(drop=True)
@@ -4127,6 +4139,41 @@ class MRSmission():
 
 
 
+    def get_eventProperty(self, eventDesc, DFcolumn):
+        """
+        Returns a value from the eventsDF table at given event. 
+
+        Parameters
+        ----------
+        eventDesc : String
+            Event description string, used to find the event index.
+        DFcolumn : String
+            Name of the eventDF column.
+
+        Returns
+        -------
+        eventProperty : float
+            Found value for that property and that event.
+
+        """
+        
+        # make sure DF column is in eventsDF
+        if not DFcolumn in self.eventsDF.columns:
+            print('MRS:\t\tWARNING in get_eventProperty(); column '+ DFcolumn +' not found in eventsDF.')
+            return float('nan')
+        
+        # find index of event desc
+        eventIndex = self.eventsDF[self.eventsDF['eventType']==eventDesc].index.values
+        
+        # if event not found 
+        if len(eventIndex)==0:
+            print('MRS:\t\tWARNING in get_eventProperty(); event not found.')
+            return float('nan')
+            
+        # get event property value
+        propertyValue = self.eventsDF.loc[eventIndex,[DFcolumn]].values
+        
+        return propertyValue
 
     def find_EventTime(self, value, eventMode, DFcolumn, eventType):
         """
