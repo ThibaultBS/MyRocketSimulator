@@ -265,7 +265,7 @@ class MRSmissionData():
         
         F_Earth_ENU_abs: 
             - Absolute angle values.
-            - Earth-bound East/North/Up frame (using WGS84 shape of Earth).
+            - Earth-bound East/North/Up frame (using round shape of Earth).
             - Can be combined with: 
                 - F_Earth_ENU_abs
                 - F_EFvel_Earth_ENU_delta

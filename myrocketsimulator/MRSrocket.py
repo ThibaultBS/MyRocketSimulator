@@ -512,7 +512,7 @@ class SpaceCraftElement():
         if not hasattr(self.SCED, 'throttleInit'): 
             self.SCED.throttleInit = np.array([
                  # MET    Start   End     EngineType  EngineAmount,   Description
-                 [ -20.0,   0.0,  0.0,     -1,          0,            ''],
+                 [ -86400,   0.0,  0.0,     -1,          0,            ''],
                  ], dtype=object) 
 
         # make a copy of throttleInit table to work with

@@ -71,13 +71,13 @@ CREMEmission.load_comparisonStateVec(0, 1000*GMATcsv.iloc[:,1:7].values)
 CREMEviewer = MRSvislib.MRSviewer(CREMEmission)
 
 # plot GMAT to MRS position difference 
-figEx1PosDiff=CREMEviewer.plot_ComparisonPosDiff()
+figEx1PosDiff, _ = CREMEviewer.plot_ComparisonPosDiff()
 
 # save plot
 figEx1PosDiff.savefig('./MRSoutput/MRSexample1_ComparisonPosDiff.svg', dpi=600)
 
 # plot ground track
-figEx1GroundtrackEarth = CREMEviewer.plot_GroundtrackEarth()
+figEx1GroundtrackEarth, _ = CREMEviewer.plot_GroundtrackEarth()
 
 # save plot
 figEx1GroundtrackEarth.savefig('./MRSoutput/MRSexample1_GroundtrackEarth.svg', dpi=600)

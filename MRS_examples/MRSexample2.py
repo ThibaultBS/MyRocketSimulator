@@ -95,7 +95,7 @@ CREMEmission.load_comparisonStateVec(0, 1000*GMATcsv.iloc[:,1:7].values)
 CREMEviewer = MRSvislib.MRSviewer(CREMEmission)
 
 # plot GMAT to MRS position difference 
-figEx2PosDiff = CREMEviewer.plot_ComparisonPosDiff()
+figEx2PosDiff, _ = CREMEviewer.plot_ComparisonPosDiff()
 
 # save plot
 figEx2PosDiff.savefig('./MRSoutput/MRSexample2_ComparisonPosDiff.svg', dpi=600)

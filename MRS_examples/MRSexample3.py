@@ -90,14 +90,14 @@ CREMEmission.exportDataframes(folder='./MRSoutput/',missionDFonly=True)
 CREMEviewer = MRSvislib.MRSviewer(CREMEmission)
 
 # 3D view
-figEx3GCRForbit = CREMEviewer.plot_GCRF_orbit()
+figEx3GCRForbit, _ = CREMEviewer.plot_GCRF_orbit()
 figEx3GCRForbit.axes[0].view_init(16,25) # rotate view
 
 # save plot
 figEx3GCRForbit.savefig('./MRSoutput/MRSexample3_GCRForbit.svg', dpi=600)
 
 # show orbital elements
-figEx3OE = CREMEviewer.plot_EarthOE()
+figEx3OE, _ = CREMEviewer.plot_EarthOE()
 
 # save plot
 figEx3OE.savefig('./MRSoutput/MRSexample3_OE.svg', dpi=600)

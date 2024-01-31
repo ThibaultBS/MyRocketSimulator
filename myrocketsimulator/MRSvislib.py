@@ -54,17 +54,17 @@ class MRSviewer():
         
     def get_DFpointer(self, METrange):
         """
-        
+        Gets start and end pointers of dataset for given MET range. Internal function.
 
         Parameters
         ----------
-        METrange : TYPE
-            DESCRIPTION.
+        METrange : Array of two floats
+            Start and End MET values.
 
         Returns
         -------
-        DFpointer : TYPE
-            DESCRIPTION.
+        DFpointer : array of two ints
+            Start and end rows of mission DF.
 
         """
         
@@ -84,6 +84,45 @@ class MRSviewer():
     def plotDatasets(self,plot_title, plot_xlabel, plot_ylabel1, plot_ylabel2,
                      plot_xdata, plot_ydata1, plot_ydata2, plot_legend1, plot_legend2,
                      bgimage, bgsize, ylim2):
+        """
+        Plots one or two datasets from the mission data frame. Internal function.
+        Users should call the missionDFplotTS() metho.d
+
+        Parameters
+        ----------
+        plot_title : string
+            Plot title.
+        plot_xlabel : string
+            Label of x axis.
+        plot_ylabel1 : string
+            Label of left y axis.
+        plot_ylabel2 : string
+            Label of right y axis.
+        plot_xdata : array of floats
+            X data.
+        plot_ydata1 : array of floats
+            Y data for left axis.
+        plot_ydata2 : array of floats
+            Y data for right axis.
+        plot_legend1 : string
+            Legend for left axis data.
+        plot_legend2 : string
+            Legend for right axis data.
+        bgimage : string
+            Filename/path to background image.
+        bgsize : array of floats
+            X/Y limits of background image.
+        ylim2 : array of two floats
+            Limitation of right y axis.
+
+        Returns
+        -------
+        fig : figure handle
+            No description.
+        ax : axis handle
+            No description.
+
+        """
         
         fig, ax = plt.subplots(1,1)
         ax.set_title(plot_title)
@@ -126,6 +165,40 @@ class MRSviewer():
     def missionDFplotTS(self, dataset1='', METrange=[0], dataset2 = '', 
                         plot_title='', bgimage = '', ylim2=[0], xunit='sec',
                         filename = '', dpi=600):
+        """
+        Plots one or two datasets from the mission data frame. Y axis labels
+        are automatically set in function of chosen dataset. Image can be
+        exported.
+
+        Parameters
+        ----------
+        dataset1 : string
+            Name of missionDF dataset to be plotted
+        METrange : array of two floats, optional
+            Start/End MET values. The default is [0].
+        dataset2 : string, optional
+            Name of second dataset. The default is ''.
+        plot_title : string, optional
+            Plot title. The default is ''.
+        bgimage : string, optional
+            Background image filename/path. The default is ''.
+        ylim2 : array of two flaots, optional
+            Limitation of right y axis. The default is [0].
+        xunit : string, optional
+            Unit of X axis. Allowed options: sec, min, hours. The default is 'sec'.
+        filename : string, optional
+            Where to save the image if required. The default is ''.
+        dpi : int, optional
+            DPI for saed image. The default is 600.
+
+        Returns
+        -------
+        fig : figure handle
+            No description.
+        ax : axis handle
+            No description.
+
+        """
       
         
         # get start/end pointer for mission dataframe
@@ -152,9 +225,9 @@ class MRSviewer():
             
         # set up default x label
         if xunit == 'sec':
-            plot_xlabel = 'minutes [min]'
-        elif xunit == 'min':
             plot_xlabel = 'seconds [s]'
+        elif xunit == 'min':
+            plot_xlabel = 'minutes [min]'
         elif xunit == 'hours':
             plot_xlabel = 'hours [h]'
         else:
@@ -209,6 +282,70 @@ class MRSviewer():
         else:
             bgsize = 0
      
+        # overwrite settings in function of type of data
+        if dataset1 == 'EarthFixedVEL':
+            plot_ylabel1 = 'SC velocity (Earth-fixed) [m/s]'
+        elif dataset1 == 'EarthAlt':
+            plot_ylabel1 = 'WGS84 altitude [km]'
+            plot_ydata1 /= 1000
+        elif dataset1 == 'atmosT':
+            plot_ylabel1 = 'Temperature [K]'
+        elif dataset1 == 'atmosPa':
+            plot_ylabel1 = 'Pressure [kPA]'
+            plot_ydata1 /= 1000
+        elif dataset1 == 'atmosRho':
+            plot_ylabel1 = 'Density [kg/m^3]'
+        elif dataset1 == 'atmosM1':
+            plot_ylabel1 = 'Mach 1 [m/s]'
+        elif dataset1 == 'EarthFixedFPA':
+            plot_ylabel1 = 'SC FPA (Earth-fixed) [deg]'
+        elif dataset1 == 'EarthFixedHA':
+            plot_ylabel1 = 'SC HA (Earth-fixed) [deg]'
+        elif dataset1 == 'EarthWGS84FixedFPA':
+            plot_ylabel1 = 'SC FPA (Earth-fixed, WGS84) [deg]'
+        elif dataset1 == 'EarthGS84FixedHA':
+            plot_ylabel1 = 'SC HA (Earth-fixed, WGS84) [deg]'
+        elif dataset1 == 'dynPress':
+            plot_ylabel1 = 'Dynamic pressure [kPa]'
+            plot_ydata1 /= 1000
+        elif dataset1 == 'Mach':
+            plot_ylabel1 = 'Mach number'
+        elif dataset1 == 'AoA':
+            plot_ylabel1 = 'Angle of Attack [deg]'
+        elif dataset1 == 'SC_active_Thrust':
+            plot_ylabel1 = 'Thrust [kN]'
+            plot_ydata1 /= 1000
+        elif dataset1 == 'SC_active_Mass':
+            plot_ylabel1 = 'Mass [1000 kg]'
+            plot_ydata1 /= 1000
+        elif dataset1 == 'SC_active_acc':
+            plot_ylabel1 = 'SC acceleration [m/s]'
+        elif dataset1 == 'DragF':
+            plot_ylabel1 = 'Drag force [kN]'
+            plot_ydata1 /= 1000
+        elif dataset1 == 'EarthFPA':
+            plot_ylabel1 = 'SC FPA (Earth, inertial) [deg]'
+        elif dataset1 == 'EarthHA':
+            plot_ylabel1 = 'SC HA (Earth, inertial) [deg]'
+        elif dataset1 == 'EarthVEL':
+            plot_ylabel1 = 'SC velocity (Earth, inertial) [m/s]'
+        elif dataset1 == 'MoonFPA':
+            plot_ylabel1 = 'SC FPA (Moon, inertial) [deg]'
+        elif dataset1 == 'MoonVEL':
+            plot_ylabel1 = 'SC velocity (Moon, inertial) [m/s]'
+        elif dataset1 == 'ShadowFunction':
+            plot_ylabel1 = 'Sun visibility [%]'
+            plot_ydata1 *= 100
+        elif dataset1 == 'SRP':
+            plot_ylabel1 = 'Solar Radiation Pressure [N]'
+        elif dataset1 == 'range':
+            plot_ylabel1 = 'Range [km]'
+            plot_ydata1 /= 1000
+        elif dataset1 == 'Mach':
+            plot_ylabel1 = 'Mach number'
+        elif dataset1 == 'Mach':
+            plot_ylabel1 = 'Mach number'
+     
         
         # call plot function 
         fig, ax = self.plotDatasets(plot_title, plot_xlabel, plot_ylabel1, plot_ylabel2,
@@ -222,19 +359,82 @@ class MRSviewer():
         
         return fig, ax
     
-    
-    def plot_GroundtrackEarth(self, METrange=[0]):
+    def plot_ElevationValues(self, METrange=[0]):
         """
-        
+        Plogs various elevation angles.
 
         Parameters
         ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
+        METrange : array of two floats, optional
+            MET start/end range. The default is [0] (no start/end values)
 
         Returns
         -------
-        None.
+        fig : figure handle
+            No description.
+        ax : axis handle
+            No description.
+
+        """
+        
+        if not 'gVec_Earth_ENU_abs_elev' in self.missionDF.columns:
+            print('MRSviewer:\tNo guidance vectors stored mission DF. Quitting.')
+            return None, None
+        
+        # get start/end pointer for mission dataframe
+        DFpointer = self.get_DFpointer(METrange)
+        
+        plot_title = self.MD.name + ' guidance elevation values'
+        plot_xlabel = 'seconds [s]'
+        plot_ylabel = 'elevation values [deg]'
+        
+        fig, ax = plt.subplots(1,1)
+        ax.set_title(plot_title)
+        ax.set_xlabel(plot_xlabel)
+        ax.set_ylabel(plot_ylabel)
+        ax.grid()
+        
+        # same x data for all datasets
+        plot_xdata = self.missionDF.loc[DFpointer[0]:DFpointer[1], ['MET']] 
+        
+        ax.plot(plot_xdata, self.missionDF.loc[DFpointer[0]:DFpointer[1], ['gVec_Earth_ENU_abs_elev']],\
+                label='gVec_Earth_ENU_abs_elev', linewidth=2)
+        ax.plot(plot_xdata, self.missionDF.loc[DFpointer[0]:DFpointer[1], ['gVec_EFvel_Earth_ENU_delta_elev']],\
+                label='gVec_EFvel_Earth_ENU_delta_elev', linewidth=2)
+        ax.plot(plot_xdata, self.missionDF.loc[DFpointer[0]:DFpointer[1], ['gVec_SFvel_Earth_ENU_delta_elev']],\
+                label='gVec_SFvel_Earth_ENU_delta_elev', linewidth=2)
+        ax.plot(plot_xdata, self.missionDF.loc[DFpointer[0]:DFpointer[1], ['gVec_Launch_ENU_abs_pitch']],\
+                label='gVec_Launch_ENU_abs_pitch', linewidth=2)
+        ax.plot(plot_xdata, self.missionDF.loc[DFpointer[0]:DFpointer[1], ['gVec_GCRF_abs_elev']],\
+                label='gVec_GCRF_abs_elev', linewidth=2)
+        ax.plot(plot_xdata, self.missionDF.loc[DFpointer[0]:DFpointer[1], ['gVec_VUW_abs_elev']],\
+                label='gVec_VUW_abs_elev', linewidth=2)
+        ax.plot(plot_xdata, self.missionDF.loc[DFpointer[0]:DFpointer[1], ['gVec_VNB_abs_elev']],\
+                label='gVec_VNB_abs_elev', linewidth=2)
+        
+        ax.legend(loc='best')
+    
+        #plt.subplots_adjust(left=0.15)
+    
+        return fig, ax
+        
+            
+    
+    def plot_GroundtrackEarth(self, METrange=[0]):
+        """
+        Ground track on Earth surface.
+
+        Parameters
+        ----------
+        METrange : array of two floats, optional
+            MET start/end range. The default is [0] (no start/end values)
+
+        Returns
+        -------
+        fig : figure handle
+            No description.
+        ax : axis handle
+            No description.
 
         """
         
@@ -275,21 +475,24 @@ class MRSviewer():
             ax.plot(lonvalues[pointer:i],latvalues[pointer:i],'r', linewidth=1)
             pointer = i+1
             
-        return fig
+        return fig, ax
             
             
     def plot_GroundtrackMoon(self, METrange=[0]):
         """
-        
+        Ground track on Moon surface.
 
         Parameters
         ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
+        METrange : array of two floats, optional
+            MET start/end range. The default is [0] (no start/end values)
 
         Returns
         -------
-        None.
+        fig : figure handle
+            No description.
+        ax : axis handle
+            No description.
 
         """
         
@@ -330,20 +533,23 @@ class MRSviewer():
             ax.plot(lonvalues[pointer:i],latvalues[pointer:i],'r', linewidth=1)
             pointer = i+1
         
-        return fig
+        return fig, ax
         
     def plot_EarthOE(self, METrange=[0]):
         """
-        
+        Orbital elements in Earth orbit.
 
         Parameters
         ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
+        METrange : array of two floats, optional
+            MET start/end range. The default is [0] (no start/end values)
 
         Returns
         -------
-        None.
+        Nfig : figure handle
+            No description.
+        ax : axis handle
+            No description.
 
         """
         
@@ -423,20 +629,23 @@ class MRSviewer():
                 self.missionDF.EarthOEtrueAnomaly[DFpointer[0]:DFpointer[1]],
                 linewidth=1.5)
         
-        return fig
+        return fig, ax
         
     def plot_MoonOE(self, METrange=[0]):
         """
-        
+        Orbital elements in Moon orbit.
 
         Parameters
         ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
-
+        METrange : array of two floats, optional
+            MET start/end range. The default is [0] (no start/end values)
+            
         Returns
         -------
-        None.
+        fig : figure handle
+            No description.
+        ax : axis handle
+            No description.
 
         """
         
@@ -515,20 +724,23 @@ class MRSviewer():
                 self.missionDF.MoonOEtrueAnomaly[DFpointer[0]:DFpointer[1]],
                 linewidth=1.5)
         
-        return fig
+        return fig, ax
         
     def plot_ComparisonPosDiff(self, METrange=[0]):
         """
-        
+        Absolute distance between simulated trajectory and imported comparison data.
 
         Parameters
         ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
+        METrange : array of two floats, optional
+            MET start/end range. The default is [0] (no start/end values)
 
         Returns
         -------
-        None.
+        fig : figure handle
+            No description.
+        ax : axis handle
+            No description.
 
         """
         
@@ -547,20 +759,24 @@ class MRSviewer():
                 self.missionDF.compPosDiff[DFpointer[0]:DFpointer[1]],
                 linewidth=2)
         
-        return fig
+        return fig, ax
         
     def plot_ComparisonStateVecDiff(self, METrange=[0]):
         """
+        Element-wise comparison of state vectors of simulated and imported trajectories.
         
 
         Parameters
         ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
+        METrange : array of two floats, optional
+            MET start/end range. The default is [0] (no start/end values)
 
         Returns
         -------
-        None.
+        fig : figure handle
+            No description.
+        ax : axis handle
+            No description.
 
         """
         
@@ -627,21 +843,24 @@ class MRSviewer():
                 self.missionDF.vz[DFpointer[0]:DFpointer[1]]-self.missionDF.compVz[DFpointer[0]:DFpointer[1]],
                 linewidth=1.5)
         
-        return fig
+        return fig, ax
         
         
     def plot_MoonRPS(self, METrange=[0]):
         """
-        
+        3D representation of simulated trajectory in Earth-Moon rotating frame.
 
         Parameters
         ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
+        METrange : array of two floats, optional
+            MET start/end range. The default is [0] (no start/end values)
 
         Returns
         -------
-        None.
+        fig : figure handle
+            No description.
+        ax : axis handle
+            No description.
 
         """
         
@@ -668,22 +887,25 @@ class MRSviewer():
         ax.legend()
         ax.view_init(elev=35., azim=-35)
         
-        return fig
+        return fig, ax
         
     def plot_GCRF_XYpos(self, METrange=[0], withMoon=0):
         """
-        
+        2D plot of GCRF position.
 
         Parameters
         ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
+        METrange : array of two floats, optional
+            MET start/end range. The default is [0] (no start/end values)
         withMoon : TYPE, optional
             DESCRIPTION. The default is 0.
 
         Returns
         -------
-        None.
+        fig : figure handle
+            No description.
+        ax : axis handle
+            No description.
 
         """
         
@@ -712,20 +934,23 @@ class MRSviewer():
         # add legend
         ax.legend()
         
-        return fig
+        return fig, ax
     
     def plot_GCRF_orbit(self, METrange=[0]):
         """
-        
+        3D plot of GCRF position including Earth surface.
 
         Parameters
         ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
+        METrange : array of two floats, optional
+            MET start/end range. The default is [0] (no start/end values)
 
         Returns
         -------
-        None.
+        fig : figure handle
+            No description.
+        ax : axis handle
+            No description.
 
         """
         
@@ -774,7 +999,7 @@ class MRSviewer():
         z = EarthR * np.cos(v)
         ax.plot_surface(x, y, z, color='blue', alpha=0.3)     
         
-        return fig
+        return fig, ax
         
         
     def export_Earth_KML(self, METrange=[0], folder='./'):
@@ -783,8 +1008,8 @@ class MRSviewer():
 
         Parameters
         ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
+        METrange : array of two floats, optional
+            MET start/end range. The default is [0] (no start/end values)
 
         Returns
         -------
@@ -832,8 +1057,8 @@ class MRSviewer():
 
         Parameters
         ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
+        METrange : array of two floats, optional
+            MET start/end range. The default is [0] (no start/end values)
 
         Returns
         -------
@@ -878,287 +1103,4 @@ class MRSviewer():
         return None
         
     
-    
-
-
-#
-# methods below to be deleted
-#
-
-
-    def plot_SCactiveThrust(self, METrange=[0]):
-        """
-
-        Parameters
-        ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
-
-        Returns
-        -------
-        None.
-
-        """
-        
-        # get start/end pointer for mission dataframe
-        DFpointer = self.get_DFpointer(METrange)
-        
-        figtitle = self.SC.name + ' Thrust'
-        fig, ax = plt.subplots(1,1)
-        #fig.set_size_inches(10, 5)
-        ax.set_title(figtitle)
-        ax.set_xlabel('MET [s]')
-        ax.set_ylabel('Thrust [kN]')
-        #plt.subplots_adjust(left=.0, bottom=0.12, right=.99, top=0.90, wspace=0, hspace=0)
-        ax.grid()
-        ax.plot(self.missionDF.MET[DFpointer[0]:DFpointer[1]],
-                self.missionDF.SC_active_Thrust[DFpointer[0]:DFpointer[1]]/1000,
-                label='Spacecraft Thrust', linewidth=2)
-        ax.legend()
-        
-        plt.subplots_adjust(left=0.15)
-        
-        return fig
-    
-    
-    def plot_SCactiveMass(self, METrange=[0]):
-        """
-
-        Parameters
-        ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
-
-        Returns
-        -------
-        None.
-
-        """
-        
-        # get start/end pointer for mission dataframe
-        DFpointer = self.get_DFpointer(METrange)
-        
-        figtitle = self.SC.name + ' Mass'
-        fig, ax = plt.subplots(1,1)
-        #fig.set_size_inches(10, 5)
-        ax.set_title(figtitle)
-        ax.set_xlabel('MET [s]')
-        ax.set_ylabel('Mass [1000 kg]')
-        #plt.subplots_adjust(left=.0, bottom=0.12, right=.99, top=0.90, wspace=0, hspace=0)
-        ax.grid()
-        ax.plot(self.missionDF.MET[DFpointer[0]:DFpointer[1]],
-                self.missionDF.SC_active_Mass[DFpointer[0]:DFpointer[1]]/1000,
-                label='Spacecraft Mass', linewidth=2)
-        ax.legend()
-        
-        plt.subplots_adjust(left=0.15)
-        
-        return fig
-    
-    def plot_SCactiveTWR(self, METrange=[0]):
-        """
-
-        Parameters
-        ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
-
-        Returns
-        -------
-        None.
-
-        """
-        
-        # get start/end pointer for mission dataframe
-        DFpointer = self.get_DFpointer(METrange)
-        
-        figtitle = self.SC.name + ' Thrust-to-weight ratio'
-        fig, ax = plt.subplots(1,1)
-        #fig.set_size_inches(10, 5)
-        ax.set_title(figtitle)
-        ax.set_xlabel('MET [s]')
-        ax.set_ylabel('Thrust-to-weight ratio')
-        #plt.subplots_adjust(left=.0, bottom=0.12, right=.99, top=0.90, wspace=0, hspace=0)
-        ax.grid()
-        ax.plot(self.missionDF.MET[DFpointer[0]:DFpointer[1]],
-                self.missionDF.SC_active_TWR[DFpointer[0]:DFpointer[1]],
-                label='TWR', linewidth=2)
-        ax.legend()
-        
-        plt.subplots_adjust(left=0.15)
-        
-        return fig
-    
-    
-    def plot_SCactiveacc(self, METrange=[0]):
-        """
-
-        Parameters
-        ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
-
-        Returns
-        -------
-        None.
-
-        """
-        
-        # get start/end pointer for mission dataframe
-        DFpointer = self.get_DFpointer(METrange)
-        
-        figtitle = self.SC.name + ' Thrust Acceleration'
-        fig, ax = plt.subplots(1,1)
-        #fig.set_size_inches(10, 5)
-        ax.set_title(figtitle)
-        ax.set_xlabel('MET [s]')
-        ax.set_ylabel('Thrust acceleration [m/s^2]')
-        #plt.subplots_adjust(left=.0, bottom=0.12, right=.99, top=0.90, wspace=0, hspace=0)
-        ax.grid()
-        ax.plot(self.missionDF.MET[DFpointer[0]:DFpointer[1]],
-                self.missionDF.SC_active_acc[DFpointer[0]:DFpointer[1]],
-                label='Thrust acceleration', linewidth=2)
-        ax.legend()
-        
-        plt.subplots_adjust(left=0.15)
-        
-        return fig
-        
-    def plot_EarthAlt(self, METrange=[0]):
-        """
-
-        Parameters
-        ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
-
-        Returns
-        -------
-        None.
-
-        """
-        
-        # get start/end pointer for mission dataframe
-        DFpointer = self.get_DFpointer(METrange)
-        
-        figtitle = self.SC.name + ' Altitude above Earth surface'
-        fig, ax = plt.subplots(1,1)
-        #fig.set_size_inches(10, 5)
-        ax.set_title(figtitle)
-        ax.set_xlabel('MET [s]')
-        ax.set_ylabel('Altitude [km]')
-        #plt.subplots_adjust(left=.0, bottom=0.12, right=.99, top=0.90, wspace=0, hspace=0)
-        ax.grid()
-        ax.plot(self.missionDF.MET[DFpointer[0]:DFpointer[1]],
-                self.missionDF.EarthAlt[DFpointer[0]:DFpointer[1]]/1000,
-                label='Altitude', linewidth=2)
-        ax.legend()
-        
-        plt.subplots_adjust(left=0.15)
-        
-        return fig
-        
-    
-    def plot_EarthFixedFPA(self, METrange=[0]):
-        """
-
-        Parameters
-        ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
-
-        Returns
-        -------
-        None.
-
-        """
-        
-        # get start/end pointer for mission dataframe
-        DFpointer = self.get_DFpointer(METrange)
-        
-        figtitle = self.SC.name + ' Earth-fixed FPA'
-        fig, ax = plt.subplots(1,1)
-        #fig.set_size_inches(10, 5)
-        ax.set_title(figtitle)
-        ax.set_xlabel('MET [s]')
-        ax.set_ylabel('FPA [°]')
-        #plt.subplots_adjust(left=.0, bottom=0.12, right=.99, top=0.90, wspace=0, hspace=0)
-        ax.grid()
-        ax.plot(self.missionDF.MET[DFpointer[0]:DFpointer[1]],
-                self.missionDF.EarthFixedFPA[DFpointer[0]:DFpointer[1]],
-                label='EF FPA', linewidth=2)
-        ax.legend()
-        
-        plt.subplots_adjust(left=0.15)
-        
-        return fig
-    
-    def plot_EarthFixedHA(self, METrange=[0]):
-        """
-
-        Parameters
-        ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
-
-        Returns
-        -------
-        None.
-
-        """
-        
-        # get start/end pointer for mission dataframe
-        DFpointer = self.get_DFpointer(METrange)
-        
-        figtitle = self.SC.name + ' Earth-fixed heading angle'
-        fig, ax = plt.subplots(1,1)
-        #fig.set_size_inches(10, 5)
-        ax.set_title(figtitle)
-        ax.set_xlabel('MET [s]')
-        ax.set_ylabel('HA [°]')
-        #plt.subplots_adjust(left=.0, bottom=0.12, right=.99, top=0.90, wspace=0, hspace=0)
-        ax.grid()
-        ax.plot(self.missionDF.MET[DFpointer[0]:DFpointer[1]],
-                self.missionDF.EarthFixedHA[DFpointer[0]:DFpointer[1]],
-                label='EF HA', linewidth=2)
-        ax.legend()
-        
-        plt.subplots_adjust(left=0.15)
-        
-        return fig
-    
-    
-    def plot_EarthFixedVEL(self, METrange=[0]):
-        """
-
-        Parameters
-        ----------
-        METrange : TYPE, optional
-            DESCRIPTION. The default is [0].
-
-        Returns
-        -------
-        None.
-
-        """
-        
-        # get start/end pointer for mission dataframe
-        DFpointer = self.get_DFpointer(METrange)
-        
-        figtitle = self.SC.name + ' Earth-fixed velocity'
-        fig, ax = plt.subplots(1,1)
-        #fig.set_size_inches(10, 5)
-        ax.set_title(figtitle)
-        ax.set_xlabel('MET [s]')
-        ax.set_ylabel('EF vel [m/s]')
-        #plt.subplots_adjust(left=.0, bottom=0.12, right=.99, top=0.90, wspace=0, hspace=0)
-        ax.grid()
-        ax.plot(self.missionDF.MET[DFpointer[0]:DFpointer[1]],
-                self.missionDF.EarthFixedVEL[DFpointer[0]:DFpointer[1]],
-                label='EF velocity', linewidth=2)
-        ax.legend()
-        
-        plt.subplots_adjust(left=0.15)
-        
-        return fig
     

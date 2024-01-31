@@ -52,7 +52,7 @@ class MRSmissionData():
            columns= ['MET','type','configID', 'comment'])
     
     propaSettings = pd.DataFrame([
-                    [1,     'DOP853',   1,            0,        10,     'auto-step size, no thrust, DOP853'],
+                    [1,     'DOP853',   10,            0,        1,     'auto-step size, no thrust, DOP853'],
                    ], 
            columns= ['mode','method','stepsizePropa','forcesID','downsampleLog','comment'])
   

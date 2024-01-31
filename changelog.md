@@ -13,16 +13,22 @@ Relevant changes to the MyRocketSimulator are summarized in this changelog.
 - Several new expand_DF() types
 - MRSvislib offers now a universal view for missionDF values: missionDFplotTS()
 - MRSvislib get_eventProperty() returns a specific value for a given event
+- MRSvislib plots return fig and axis handle (before it was only the figure handle)
 
 ### Fixed
 
 - Calculation of t0_JD_liftoff for pure launchtype=1 missions.
 - Bugs in get_guidance() in MRSguidance
 - MRSspacraft's SpacCraft() get_DragF() now returns single value when vrel is a float
+- corrected invalid cosine values in get_EarthRangeToLaunchsite()
 
 ### Changed
 
 - Definitin of TempDF takes now place in propagate_Mode0()/propagate_Mode1()
+- EARTH_ROT_SPEED = 7.29211514670698e-05 rad/s; old value:7292115.1467e-11 rad/s
+- The 'stepsizePropa' property in the 'propaSettings' now directly sets up
+  the step size for logging; value has no effect on integration. The property  
+  'downsampleLog' will be removed in a future release and is no longer in use.
 
 ### Removed
 

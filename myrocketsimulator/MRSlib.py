@@ -40,7 +40,7 @@ SEC2DAYS = 1./(3600.*24.)
 HOURS2RAD = HOURS2DEG * DEG2RAD
 RAD2HOURS = RAD2DEG * DEG2HOURS
 AU = 149597870700. # astronomical unit [m]
-EARTH_ROT_SPEED = 7292115.1467e-11 # [rad/s]
+EARTH_ROT_SPEED = 7.29211514670698e-05 # [rad/s]
 SRP1AU =  4.5344321e-6 #  [N/m^2] solar flux radiation pressure at one AU
 R = 287.052874 # specific gas constant dry air
 G0 = 9.80665 # standard Earth gravity
@@ -269,8 +269,8 @@ class MRSmission():
 
         Parameters
         ----------
-        missionname : string, optional
-             The name of the mission file to be loaded.
+        missionname : string OR class, optional
+             The name OR the class of the mission file to be loaded.
              The default is 'defaultMRSmission'.
         checkmission : True/False, optional
             Wether to check the mission data or not.
@@ -595,9 +595,9 @@ class MRSmission():
             # if Earth-SH are used in lauch segment:
             if lmax_launchsegment:
                 self.ENU_liftoff = self.get_ENUvec_EarthGravity(self.MD.t0_JD_liftoff, self.y0_liftoff, lmax_launchsegment)
-            # else, use simpler ENU calculation (based on ellipsoid of Earth, going through Skyfield)
+            # else, use simpler ENU calculation (based on round Earth so that Up-vector is opposite of gravity vector)
             else:
-                self.ENU_liftoff = self.get_ENUvec_Earth(self.MD.t0_JD_liftoff, self.y0_liftoff, frame='WGS84')
+                self.ENU_liftoff = self.get_ENUvec_Earth(self.MD.t0_JD_liftoff, self.y0_liftoff, frame='TOD')
 
         # no launchsite --> ENU_liftoff = GCRF axes
         else:
@@ -1068,10 +1068,13 @@ class MRSmission():
         # get time settings for logging of statevec
         LOGstepsize = self.MD.propaSettings['stepsizePropa'][self.propaID]
         LOGstart = self.t_span[0]
-        LOGend = self.t_span[1]
+        LOGend = self.t_span[1]  
         
         # define MET values for logging
-        METlog = np.arange(LOGstart, LOGend, LOGstepsize)
+        METlog = np.linspace(LOGstart, LOGend-LOGstepsize, round((LOGend-LOGstart)/LOGstepsize))
+        
+        # define MET values for logging
+        #METlog = np.arange(LOGstart, LOGend, LOGstepsize)
         
         # make temporary log dataframe
         self.make_TempDF(int(len(METlog)))
@@ -1159,6 +1162,7 @@ class MRSmission():
         else:
             METactive = t_span
         
+        
         # loop through MET active ranges
         for i in range(len(METactive)-1):
        
@@ -1172,9 +1176,10 @@ class MRSmission():
                 # set fixed pointer for spacecraft
                 self.SC.set_fixedThrottlePointer(METactive[i])
                 
-                # update guidance
-                _ = self.GO.get_guidance(self.MD.t0_JD + (METactive[i] - self.MD.t0_MET) * SEC2DAYS,\
+                # update guidance; gVec vector itself not used in this function
+                gVec = self.GO.get_guidance(self.MD.t0_JD + (METactive[i] - self.MD.t0_MET) * SEC2DAYS,\
                                          y0, METactive[i], mode='TrueMET')
+             
             
             # perform solve_ivp
             # https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html
@@ -1190,11 +1195,10 @@ class MRSmission():
             LOGstepsize = self.MD.propaSettings['stepsizePropa'][self.propaID]
             LOGstart = np.ceil(t_span_active[0]/LOGstepsize)*LOGstepsize
             # substract 1e-10 to make sure that LOGend is not equal to end of MET range
-            LOGend = np.floor((t_span_active[1]-1e-10)/LOGstepsize)*LOGstepsize
+            LOGend = np.floor((t_span_active[1]-1e-5)/LOGstepsize)*LOGstepsize
         
-            # define MET values for logging
-            METlog = np.arange(LOGstart, LOGend+LOGstepsize, LOGstepsize)
-            
+            METlog = np.linspace(LOGstart, LOGend, round((LOGend-LOGstart)/LOGstepsize)+1)
+           
             # make temporary log dataframe
             self.make_TempDF(int(len(METlog)))
    
@@ -1378,6 +1382,7 @@ class MRSmission():
                 accThrust = 0
         else:
             accThrust = 0
+            SCmass = 0
 
         # calculate drag acceleration if required
         if self.dragOn and SCmass>0:
@@ -1418,10 +1423,10 @@ class MRSmission():
         else:
             accSRP = np.zeros(3)
 
-
         # sum up accelerations
         acceleration = accPlanets + accDrag + accThrust + accSRP
-
+        
+        
         return acceleration
 
     def preload_ObjectPosVel(self, JDnow):
@@ -2633,7 +2638,8 @@ class MRSmission():
 
         # true equator and equinox of date (TETE, TOD)
         else:
-            R = true_equator_and_equinox_of_date.rotation_at(ts.tdb_jd(JDnow))
+            R = itrs.rotation_at(ts.tdb_jd(JDnow))
+            #R = true_equator_and_equinox_of_date.rotation_at(ts.tdb_jd(JDnow))
 
             # position in TOD
             pos_TOD = np.einsum('ij...,j...->i...', R, y[:,:3].T).T 
@@ -3125,8 +3131,16 @@ class MRSmission():
         y_launchsite = self.transform_LLAgeodetic_GCRF(JDnow, self.MD.launchsite_LLA)
         
         # calc angle between launchsite position and spacecraft position
-        angle_between_positions = np.arccos(y[:3].dot(y_launchsite[:3])/\
-                                            (np.linalg.norm(y[:3])*np.linalg.norm(y_launchsite[:3])))
+        cos_angle_between_positions = y[:3].dot(y_launchsite[:3])/\
+                                            (np.linalg.norm(y[:3])*np.linalg.norm(y_launchsite[:3]))
+                                            
+        # check for invalid values
+        if cos_angle_between_positions > 1.:
+            cos_angle_between_positions = 1.0
+        elif cos_angle_between_positions < -1.:
+            cos_angle_between_positions = -1.0
+            
+        angle_between_positions = np.arccos(cos_angle_between_positions)
             
         # get distance on ground (assuming round Earth)
         rangeToLaunchsite = angle_between_positions * EARTH_RADIUS
@@ -3136,7 +3150,8 @@ class MRSmission():
     def transform_J2000SV(self, JDnow, y, targetFrame='GCRF'):
         """
         Internal function.
-        Transforms MRS state vector from GCRF to EME2000/FK5.
+        Transforms MRS state vector from GCRF to EME2000/FK5 or vice versa.
+        Currently not in use.
 
         Parameters
         ----------
@@ -3398,8 +3413,8 @@ class MRSmission():
                 print('MRS:\t\tAdding FPA/HA/VEL (w.r.t. to elliptical Earth surface) to dataframe.')
                 FPA, HA, EFVEL = self.get_FPAHAVEL_EF(JDs, statevecs, frame='WGS84')
                 DF['EarthWGS84FixedFPA'] = FPA * RAD2DEG
-                DF['EarthGS84FixedHA']  = HA * RAD2DEG
-                DF['EarthGS84FixedVEL'] = EFVEL
+                DF['EarthWGS84FixedHA']  = HA * RAD2DEG
+                DF['EarthWGS84FixedVEL'] = EFVEL
 
             # dyn. pressure
             elif datatype == 'dynPress':
@@ -3715,7 +3730,7 @@ class MRSmission():
                 print('MRS:\t\tAdding guidance vector angle values.')
                     
                 for i in range(lenDF):
-                    gVecValues = self.GO.get_delta_gvec_to_vel(JDs[i], statevecs[i], \
+                    gVecValues = self.GO.get_delta_gvec_to_vel(JDs[i], METs[i], statevecs[i], \
                                     DF.loc[i,['gVecX', 'gVecY', 'gVecZ']].astype('float').to_numpy() )
                     
                     DF.loc[i,['gVec_Earth_ENU_abs_elev', 'gVec_Earth_ENU_abs_head']] = gVecValues[0,:2]
@@ -3725,6 +3740,7 @@ class MRSmission():
                     DF.loc[i,['gVec_GCRF_abs_elev', 'gVec_GCRF_abs_head']] = gVecValues[4,:2]
                     DF.loc[i,['gVec_VUW_abs_elev', 'gVec_VUW_abs_head']] = gVecValues[5,:2]
                     DF.loc[i,['gVec_VNB_abs_elev', 'gVec_VNB_abs_head']] = gVecValues[6,:2]
+                    DF.loc[i,['guidance_EF_FPA_vel', 'guidance_EF_HA_vel']] = gVecValues[7,:2]
                     
             
             # unknown kind of data requested

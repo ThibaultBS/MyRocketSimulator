@@ -20,7 +20,7 @@ ts = load.timescale()
 
 
 # constants
-EARTH_ROT_SPEED = 7292115.1467e-11 # [rad/s]
+EARTH_ROT_SPEED = 7.29211514670698e-05 # [rad/s]
 DEG2RAD = np.pi/180.
 RAD2DEG = 180./np.pi
 
@@ -110,15 +110,15 @@ class Guidance():
         """
         
         # Update guidance tables
-        self.gd.gElevTab = self.init_gTables(self.gd.gElevTab)
-        self.gd.gHeadTab = self.init_gTables(self.gd.gHeadTab)
+        self.gd.gElevTab = self.init_gTables(self.gd.gElevTab, 'elev')
+        self.gd.gHeadTab = self.init_gTables(self.gd.gHeadTab, 'head')
         
         # empty rotation matrix from GCRF to ITRF
         self.GCRF2ITRF = np.eye(3)
         
         return None
         
-    def init_ENU_liftoff(self, JDnow, lla):
+    def init_ENU_liftoff(self, JDnow, lla, frame='WGS84'):
         """
         Sets up the ENU frame for the launchsite. Not using actual gravity vector.
 
@@ -128,6 +128,8 @@ class Guidance():
             Julian data (TDB) at launch of spacecraft.
         lla : array of floats
             Latitude [°], longitude [°], geocentric altitude [m].
+        frame : string, default is WGS84
+            WGS84 (elliptical Earth) or TOD (true of data; round Earth)
 
         Returns
         -------
@@ -142,7 +144,7 @@ class Guidance():
         
         return None  
             
-    def init_gTables(self, gTab):
+    def init_gTables(self, gTab, gTabType):
         """
         Initializes distinct guidance tables (either elevation or heading).
         Primary tasks are to store start values and the gradient per guidance
@@ -152,6 +154,8 @@ class Guidance():
         ----------
         gTab : 2D array of floats
             Guidance table (either elevation or heading).
+        gTabType : string
+            Either 'head' or 'elev.'
 
         Returns
         -------
@@ -176,9 +180,23 @@ class Guidance():
                     
                 # set gradient of value (but not in last, because its fixed at start value)
                 if i != len(gTab)-1:
-                    gTab[i,I_gradient] = \
-                        (gTab[i,I_end_value]-gTab[i, I_start_value])/ \
-                        (gTab[i+1, I_MET]-gTab[i, I_MET] )
+                    
+                    if gTabType=='head':
+                        angleDelta = gTab[i,I_end_value]-gTab[i, I_start_value]
+                        
+                        # make sure to get the shortest way to the new value
+                        if angleDelta > 180.:
+                            angleDelta -= 360.
+                        elif angleDelta < -180.:
+                            angleDelta += 360.
+                        
+                        gTab[i,I_gradient] = \
+                            angleDelta/(gTab[i+1, I_MET]-gTab[i, I_MET])
+                        
+                    else:
+                        gTab[i,I_gradient] = \
+                            (gTab[i,I_end_value]-gTab[i, I_start_value])/ \
+                            (gTab[i+1, I_MET]-gTab[i, I_MET] )
                 # only for last segment 
                 else:
                     gTab[i, I_gradient] = 0
@@ -254,9 +272,6 @@ class Guidance():
             self.gElevPointer = ((MET-self.gd.gElevTab[:,I_MET])>=0).nonzero()[0][-1]
             self.gHeadPointer = ((MET-self.gd.gHeadTab[:,I_MET])>=0).nonzero()[0][-1]
         
-            # set rotation from ITRF to GCRF 
-            self.GCRF2ITRF = itrs.rotation_at(ts.tdb_jd(JDnow))
-        
             # check if start value and/or gradient need to be calculated (elevation)
             if np.isnan(self.gd.gElevTab[self.gElevPointer,[I_start_value, I_gradient]]).any()\
                 and self.gd.gElevTab[self.gElevPointer,I_frame] != F_none:
@@ -266,17 +281,26 @@ class Guidance():
                     
                     # go to previous guidance segments 
                     self.gElevPointer -= 1
-                    self.gHeadPointer -= 1
+                    
+                    # only use previous heading guidance segment if current one is also 
+                    # starts at this MET 
+                    if MET == self.gd.gHeadTab[self.gHeadPointer, I_MET]:
+                        self.gHeadPointer -= 1
+                        use_previous_HeadSegment = 1
+                    else:
+                        use_previous_HeadSegment = 0
                     
                     # get gVec using the previous segment
                     gVec_previousSegment = self.get_gVec(JDnow, y, MET)
                     
                     # get gVec elev/head in different frames
-                    gVec_values = self.get_delta_gvec_to_vel(JDnow, y, gVec_previousSegment)
+                    gVec_values = self.get_delta_gvec_to_vel(JDnow, MET, y, gVec_previousSegment)
                     
                     # update back to current guidance segments
                     self.gElevPointer += 1
-                    self.gHeadPointer += 1
+                    if use_previous_HeadSegment == 1:
+                        self.gHeadPointer += 1
+                        use_previous_HeadSegment = 0
                     
                     # store relevant value as start_value
                     if self.gd.gElevTab[self.gElevPointer, I_frame] == F_Earth_ENU_abs:
@@ -320,17 +344,26 @@ class Guidance():
                     
                     # go to previous guidance segments 
                     self.gHeadPointer -= 1
-                    self.gElevPointer -= 1
+                    
+                    # only use previous elevation guidance segment if current one is also 
+                    # starts at this MET 
+                    if MET == self.gd.gElevTab[self.gElevPointer, I_MET]:
+                        self.gElevPointer -= 1
+                        use_previous_ElevSegment = 1
+                    else:
+                        use_previous_ElevSegment = 0
                     
                     # get gVec using the previous segment
                     gVec_previousSegment = self.get_gVec(JDnow, y, MET)
                     
                     # get gVec elev/head in different frames
-                    gVec_values = self.get_delta_gvec_to_vel(JDnow, y, gVec_previousSegment)
+                    gVec_values = self.get_delta_gvec_to_vel(JDnow, MET, y, gVec_previousSegment)
                     
                     # update back to current guidance segments
                     self.gHeadPointer += 1
-                    self.gElevPointer += 1
+                    if use_previous_ElevSegment == 1:
+                        self.gElevPointer += 1
+                        use_previous_ElevSegment = 0
                     
                     # store relevant value as start_value
                     if self.gd.gHeadTab[self.gHeadPointer, I_frame] == F_Earth_ENU_abs:
@@ -350,10 +383,22 @@ class Guidance():
                     else:
                         self.gd.gHeadTab[self.gHeadPointer, I_start_value] = \
                             self.gd.gHeadTab[self.gHeadPointer, I_end_value] 
+                    
+                    # use only positive heading values
+                    if self.gd.gHeadTab[self.gHeadPointer, I_start_value] < 0.:
+                        self.gd.gHeadTab[self.gHeadPointer, I_start_value] += 360.
+                    
+                    # difference between start and end value angles
+                    angleDelta = self.gd.gHeadTab[self.gHeadPointer, I_end_value] - self.gd.gHeadTab[self.gHeadPointer, I_start_value]
+                    
+                    # make sure to get the shortest way to the new value
+                    if angleDelta > 180.:
+                        angleDelta -= 360.
+                    elif angleDelta < -180.:
+                        angleDelta += 360.
                         
                     # calc gradient
-                    self.gd.gHeadTab[self.gHeadPointer, I_gradient] = \
-                        (self.gd.gHeadTab[self.gHeadPointer, I_end_value] - self.gd.gHeadTab[self.gHeadPointer, I_start_value]) / \
+                    self.gd.gHeadTab[self.gHeadPointer, I_gradient] = angleDelta/ \
                         (self.gd.gHeadTab[self.gHeadPointer+1, I_MET] - self.gd.gHeadTab[self.gHeadPointer, I_MET])
                 else:
                     print('MRS:\t\tERROR get_guidance(): MET after segment start in mode TrueMET.')
@@ -448,6 +493,9 @@ class Guidance():
             else: 
                 gHeadFrame = gHeadNow
                 
+            # reduce to 0-359.99999
+            #gHeadFrame = np.mod(gHeadFrame, 360.)
+            
         # no guidance
         else:
             # gVec = velocity vector direction in GCRF
@@ -485,7 +533,7 @@ class Guidance():
             and self.gd.gHeadTab[self.gHeadPointer, I_frame] in \
             (F_Earth_ENU_abs, F_EFvel_Earth_ENU_delta, F_SFvel_Earth_ENU_delta):
                 
-            gVec = self.get_gVec_Earth_ENU_abs_LaunchPitch(JDnow, y, gElevFrame, gHeadFrame, ENU)
+            gVec = self.get_gVec_Earth_ENU_abs_LaunchPitch(JDnow, y, gElevFrame, gHeadFrame, MET, ENU)
         
         
         # Elevation:
@@ -556,7 +604,7 @@ class Guidance():
         
         # no valid combination of frames for elevation and heading 
         else:
-            print('MRS:\t\tERROR get_gVec(): no valid combination of heading/elevation frames.')
+            print('MRS:\t\tERROR get_gVec(): no valid combination of head/elev frames at MET: ', MET)
            
             # calc guidance vector 
             gVec = y[:3]/np.linalg.norm(y[:3])
@@ -612,7 +660,7 @@ class Guidance():
         return gVec
         
     
-    def get_gVec_Earth_ENU_abs_LaunchPitch(self, JDnow, y, gElevFrame, gHeadFrame, ENU=0):
+    def get_gVec_Earth_ENU_abs_LaunchPitch(self, JDnow, y, gElevFrame, gHeadFrame, MET, ENU=0):
         """
         Returns the guidance vector gVec. The heading angle is defined in the 
         provided frame (ENU), whereas the angle is used as pitch angle measured
@@ -658,13 +706,13 @@ class Guidance():
         c = np.cos(gElevFrame)
         
         # make sure to get valid values for sqrt() 
-        d = a**2+b**2-c**2
+        d = a**2 + b**2 - c**2
         if d<0.:
             d = 0.
         
         # calculate elevation in local ENU frame
         ENU_elev = 2*np.arctan((b-np.sqrt(d))/ (a+c))
-        
+       
         # calc v vector using v_projected and elevation     
         gVec = gVec_projected * np.cos(ENU_elev) + ENU[:,2] * np.sin(ENU_elev)
         
@@ -674,7 +722,7 @@ class Guidance():
         return gVec
         
 
-    def get_delta_gvec_to_vel(self, JDnow, y, gVec):
+    def get_delta_gvec_to_vel(self, JDnow, MET, y, gVec):
         """
         This method is called to determine the heading and elevation values
         for a given guidance vector in different frames. Generally, this 
@@ -686,6 +734,8 @@ class Guidance():
         ----------
         JDnow : float
            Current Julian Date (TBD).
+        MET : float
+            Mission Ellapsed Time [s]. Currently not used.
         y : array of floats
             State vector in GCRF.
         gVec : array of floats
@@ -709,7 +759,7 @@ class Guidance():
         EF_FPA_gVec, EF_HA_gVec, _ = self.get_FPAHA(JDnow, y_gVec)
             
         # values in space-fixed frame
-        SF_FPA_vel, SF_HA_vel, _ = self.get_FPAHA(JDnow, y, frame='Earth')
+        SF_FPA_vel, SF_HA_vel, _   = self.get_FPAHA(JDnow, y, frame='Earth')
         SF_FPA_gVec, SF_HA_gVec, _ = self.get_FPAHA(JDnow, y_gVec, frame='Earth')
         
         # values in launch ENU
@@ -763,7 +813,8 @@ class Guidance():
             [F_Launch_ENU_abs_pitch, F_Launch_ENU_abs_head],
             [F_GCRF_abs_elev, F_GCRF_abs_head],
             [F_VUW_abs_elev,F_VUW_abs_head],
-            [F_VNB_abs_elev,F_VNB_abs_head]
+            [F_VNB_abs_elev,F_VNB_abs_head],
+            [EF_FPA_vel, EF_HA_vel]
             ]) * RAD2DEG
         
         return gVec_values
@@ -863,7 +914,8 @@ class Guidance():
         # true equator and equinox of date (TETE, TOD)
         else:
             R = true_equator_and_equinox_of_date.rotation_at(ts.tdb_jd(JDnow))
-
+            #R = itrs.rotation_at(ts.tdb_jd(JDnow))
+            
             # position in TOD
             pos_TOD = R.dot(y[:3])
             
@@ -903,8 +955,11 @@ class Guidance():
         # Earth rotation axis in ITRS
         earthRotAxisITRS = np.array([0,0,1])
         
+        # rotation from GCRF to ITRF
+        R = itrs.rotation_at(ts.tdb_jd(JDnow))
+        
         # Earth rotation axis in GCRF
-        earthRotAxisGCRF = self.GCRF2ITRF.T.dot(earthRotAxisITRS)
+        earthRotAxisGCRF = R.T.dot(earthRotAxisITRS)
 
         yEF = y * 1.0
         # remove velocity component of Earth
