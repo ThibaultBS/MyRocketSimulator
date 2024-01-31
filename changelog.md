@@ -27,7 +27,7 @@ Relevant changes to the MyRocketSimulator are summarized in this changelog.
 - Definitin of TempDF takes now place in propagate_Mode0()/propagate_Mode1()
 - EARTH_ROT_SPEED = 7.29211514670698e-05 rad/s; old value:7292115.1467e-11 rad/s
 - The 'stepsizePropa' property in the 'propaSettings' now directly sets up
-  the step size for logging; value has no effect on integration. The property  
+  the step size for logging; value has no effect on integration. The property
   'downsampleLog' will be removed in a future release and is no longer in use.
 
 ### Removed
