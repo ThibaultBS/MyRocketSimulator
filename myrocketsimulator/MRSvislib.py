@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from importlib_resources import files
+from prettytable import PrettyTable
 import simplekml
 import re
 
@@ -46,8 +47,14 @@ class MRSviewer():
             self.SC = MRSmissionobject.SC
             self.missionDF = MRSmissionobject.missionDF
             
+            
         else:
             print('MRS:\t\tERROR: no mission data frame available.')
+            
+        
+        if hasattr(MRSmissionobject, 'eventsDF'):
+            self.eventsDF = MRSmissionobject.eventsDF
+        
         
         return None
         
@@ -418,7 +425,52 @@ class MRSviewer():
     
         return fig, ax
         
+    def print_EventDetails(self, eventList, eventProperties):
+        
+        # check that events are available, otherwise remove them from list
+        eventIndexList = np.array([], dtype=np.int8)
+        for i, eventName in enumerate(eventList):
             
+            # find index of event desc
+            eventIndex = self.eventsDF[self.eventsDF['eventType']==eventName].index.values
+        
+            # if event not found 
+            if len(eventIndex)>0:
+                eventIndexList = np.append(eventIndexList, int(eventIndex[0]))
+       
+        # check that properties are available, otherwise remove them from list
+        propertiesDeleteIndex = np.array([], dtype=np.int8)
+        for i, propertyName in enumerate(eventProperties):
+            
+            if not propertyName in self.eventsDF.columns:
+                propertiesDeleteIndex = np.append(propertiesDeleteIndex, int(i))
+        
+        # remote invalid properties
+        eventProperties = np.delete(eventProperties, propertiesDeleteIndex)
+        
+        
+        # make table and plot events + properties
+        tableColNames = np.append(['Event', 'MET [s]'], eventProperties)
+        
+        t = PrettyTable(list(tableColNames), max_width=25)
+        t.float_format = '5.3'
+        t.align['Event'] = 'l'   
+        #t.hrules = 1
+        
+        for i, eventIndex in enumerate(eventIndexList):
+             
+             t.add_row([
+                 self.eventsDF.iloc[eventIndex]['eventType'],
+                 self.eventsDF.iloc[eventIndex]['MET']
+                 ] + list(self.eventsDF.iloc[eventIndex][eventProperties]))
+             
+        print(t)
+        
+        
+        
+        
+        
+        
     
     def plot_GroundtrackEarth(self, METrange=[0]):
         """
@@ -561,7 +613,7 @@ class MRSviewer():
         fig.suptitle(figtitle, fontsize=16)
        
         
-        plt.subplots_adjust(left=0.1,
+        plt.subplots_adjust(left=0.15,
                             bottom=0.11, 
                             right=0.945, 
                             top=0.89, 
@@ -1026,6 +1078,11 @@ class MRSviewer():
         # get coords
         mycoords = self.missionDF.loc[DFpointer[0]:DFpointer[1],
                                       ['EarthLat', 'EarthLon', 'EarthAlt']].to_numpy()
+        
+        # reduce to 5000 values if needed by interpolation 
+        if len(mycoords)>5000:
+            reducefactor = int(np.ceil(len(mycoords)/5000))
+            mycoords = mycoords[0::reducefactor, :]
 
         # invert lat/lon
         mycoords.T[[0,1]] = mycoords.T[[1,0]]

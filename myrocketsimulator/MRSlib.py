@@ -14,6 +14,7 @@ import datetime
 import importlib
 import os
 import sys
+from copy import deepcopy
 from importlib_resources import files
 from scipy.interpolate import CubicSpline, make_interp_spline
 from nrlmsise00 import msise_model
@@ -423,10 +424,10 @@ class MRSmission():
             self.MD = defaultMRSmission.MRSmissionData
             
         else:
-            # mission data provided by user 
-            self.MD = missionname
-
-
+            # mission data provided by user class
+            self.MD = deepcopy(missionname)
+            
+            
         print('MRS:\t\tMission \''+self.MD.name+'\' loaded.')
         self.MDloaded = 1
 
@@ -608,7 +609,7 @@ class MRSmission():
         #
 
         # MET values of active SC
-        self.METactive = np.array([])
+        self.METactive = self.MD.missionSegments.MET.values
 
         # check that spacecraft data is available in mission data
         if hasattr(self.MD, 'spacecraft'):
@@ -636,7 +637,7 @@ class MRSmission():
         # check that gudiacne data is available in mission data
         if hasattr(self.MD, 'guidanceData'):
             print('MRS:\t\tLoading guidance object '+self.MD.guidanceData.name+'.')
-            self.GO = Guidance(self.MD.guidanceData)
+            self.GO = Guidance(self.MD.guidanceData())
             
             # get action times of guidance
             self.METactive = np.append(self.METactive, self.GO.gd.gElevTab[:,0])
@@ -731,7 +732,7 @@ class MRSmission():
         None
 
         """
-
+       
         # run only if MD is validated
         if not self.MDvalid:
             print('MRS:\t\tERROR: mission data not validated. Exiting.')
@@ -742,7 +743,7 @@ class MRSmission():
 
         # show some mission parameters
         print('MRS:\t\tRunning mission '+self.MD.name+'.')
-
+       
         # get state vector if starting from it (when launchtype==0)
         if self.MD.launchtype == 0:
             self.statevec = self.MD.y0
@@ -919,6 +920,12 @@ class MRSmission():
 
                     # propagate with optional thrust/guidance control
                     self.propagate_Mode1()
+                    
+                # integration of trajectory
+                elif self.propaMode==2:
+
+                    # propagate with optional thrust/guidance control
+                    self.propagate_Mode2()
              
 
                 # unknown mode
@@ -939,6 +946,9 @@ class MRSmission():
                 self.dv = self.MD.maneuverSettings.loc[self.maneuverID,['dx','dy','dz']].to_numpy().astype('float')
                 self.planet = self.MD.maneuverSettings['planet'][self.maneuverID]
                 self.args = self.MD.maneuverSettings['args'][self.maneuverID]
+
+                print('{}:\t\tDelta-v in frame {} ({}): {}'\
+                      .format(self.MD.missionSegments['MET'][i],self.maneuverFrame,self.planet,self.dv))
 
                 if self.maneuverFrame == 'LVLH':
                     self.statevec = self.apply_deltaV_LVLH(self.JD, self.statevec, self.dv, planet=self.planet)
@@ -1062,7 +1072,7 @@ class MRSmission():
         METactive = np.delete(METactive, METactive>=self.t_span[1])
        
         for i in range(len(METactive)):
-            # call SC
+            # call SC for display of SC prints 
             _, _, _ = self.SC.get_ThrustMassOther(METactive[i], Pa, verbose='v')
         
         # get time settings for logging of statevec
@@ -1071,10 +1081,10 @@ class MRSmission():
         LOGend = self.t_span[1]  
         
         # define MET values for logging
-        METlog = np.linspace(LOGstart, LOGend-LOGstepsize, round((LOGend-LOGstart)/LOGstepsize))
+        #METlog = np.linspace(LOGstart, LOGend-LOGstepsize, round((LOGend-LOGstart)/LOGstepsize))
         
         # define MET values for logging
-        #METlog = np.arange(LOGstart, LOGend, LOGstepsize)
+        METlog = np.arange(LOGstart, LOGend, LOGstepsize)
         
         # make temporary log dataframe
         self.make_TempDF(int(len(METlog)))
@@ -1253,6 +1263,128 @@ class MRSmission():
                 break
             
         return None
+    
+    def propagate_Mode2(self):
+        """
+        Propagation mode 2 performes a Runge-Kutta 4 propagation using an internal
+        function. Slow and less precise, but easy to understand how it calculates
+        new values. 
+
+        Returns
+        -------
+        None
+
+        """
+        
+        def RK4(vdot, t, y, h):
+            # vdot = function that returns gravity
+            # t = time in simulation [s]
+            # x = ECI position [m]
+            # v = ECI velocity [m/s]
+            # h = integration step size [s]
+                
+            # Runge Kutta integrator 4th order
+            # dx/dt = v     -> dx = v * dt
+            # dv/dt = vdot  -> dv = vdot * dt
+            
+            # get JDnow 'cause you never know
+            JDnow = JDnow = self.MD.t0_JD + (t - self.MD.t0_MET) * SEC2DAYS
+            
+            # split SV in pos & vel
+            x = y[:3]
+            v = y[3:]
+            
+            dx1 = h * v
+            dv1 = h * vdot(t, np.append(x,v), mode='intermediateMET') 
+            
+            dx2 = h * (v + dv1/2)
+            dv2 = h * vdot(t+h/2, np.append( x+dx1/2, v+dv1/2), mode='intermediateMET') 
+            
+            dx3 = h * (v + dv2/2)
+            dv3 = h * vdot(t+h/2 , np.append( x+dx2/2, v+dv2/2), mode='intermediateMET') 
+            
+            dx4 = h * (v + dv3)
+            dv4 = h * vdot(t+h, np.append(x + dx3, v + dv3), mode='intermediateMET')
+            
+            dx = (dx1 + 2*dx2 + 2*dx3 + dx4)/6
+            dv = (dv1 + 2*dv2 + 2*dv3 + dv4)/6
+            
+            xRK = x + dx
+            vRK = v + dv 
+            
+            return np.append(xRK, vRK)
+        
+       
+        # settings
+        t_span = self.t_span * 1
+        fun = self.get_acceleration
+        
+        # get time settings for logging#
+        LOGstepsize = self.MD.propaSettings['stepsizePropa'][self.propaID]
+        LOGstart = np.ceil(t_span[0]/LOGstepsize)*LOGstepsize
+        # substract 1e-5 to make sure that LOGend is not equal to end of MET range
+        LOGend = np.floor((t_span[1]-1e-5)/LOGstepsize)*LOGstepsize
+        METlog = np.linspace(LOGstart, LOGend, round((LOGend-LOGstart)/LOGstepsize)+1)
+        METlog = np.round(METlog, 3)
+        
+        
+        # make temporary log dataframe
+        self.make_TempDF(int(len(METlog))) 
+        
+        # write segment properties to dataframe
+        self.TempDF['segmentID'] = self.segmentID
+        self.TempDF['segmentType'] = self.segmentType
+        self.TempDF['configID'] = self.propaID
+        self.TempDF['propaMode'] = self.propaMode
+        self.TempDF['forcesID'] = self.forcesID
+        self.TempDF['activeSC'] = self.activeSC
+        self.TempDF['atmosModel'] = self.atmosModel
+
+        # save to TempDF
+        self.TempDF['MET'] = METlog
+        self.TempDF['JD_TBD'] = self.MD.t0_JD + (METlog - self.MD.t0_MET) * SEC2DAYS
+        
+        # save initial state vector in TempDF
+        self.TempDF.loc[0,['x','y','z','vx','vy','vz']] = self.statevec
+        
+        # loop for values to be put into log file 
+        for i in range(len(METlog)):
+         
+            # current state vector
+            y0 = self.statevec
+            
+            # update guidance and SC if needed
+            if METlog[i] in self.METactive:
+                
+                # set fixed pointer for spacecraft
+                self.SC.set_fixedThrottlePointer(METlog[i])
+                
+                # update guidance; gVec vector itself not used in this function
+                gVec = self.GO.get_guidance(self.MD.t0_JD + (METlog[i] - self.MD.t0_MET) * SEC2DAYS,\
+                                         y0, METlog[i], mode='TrueMET')
+         
+            # update state vector by RK4
+            self.statevec = RK4(fun, METlog[i], y0, LOGstepsize)
+            self.JD = self.MD.t0_JD + (METlog[i] + LOGstepsize - self.MD.t0_MET) * SEC2DAYS
+            
+            # save to TempDF, but not the last one
+            if i<len(METlog)-1:
+                self.TempDF.loc[i+1,['x','y','z','vx','vy','vz']] = self.statevec
+            
+            # DEBUG
+            #print(self.get_EarthAlt(METlog[i], self.statevec))
+        
+        # append segmentDF to missionDF
+        self.missionDF = pd.concat([self.missionDF, self.TempDF], ignore_index=True)    
+        
+        # reset TempDF (because it's needed to be appended to missionDF outside
+        # of this function)
+        self.make_TempDF(int(0))
+
+        # reset throttle profile pointers of SC
+        self.SC.reset_fixedThrottlePointer()
+        
+        return None
 
     def get_EarthAlt(self, MET, y):
         """
@@ -1374,12 +1506,13 @@ class MRSmission():
 
             # get guidance
             thrustVector = self.GO.get_guidance(JDnow, y, MET, mode=mode)
-
+            
             # acceleration by TVC; only if SC as a mass
             if SCmass:
                 accThrust = thrustVector * thrustForce / SCmass
             else:
                 accThrust = 0
+           
         else:
             accThrust = 0
             SCmass = 0
@@ -2415,14 +2548,18 @@ class MRSmission():
             # sometimes, cos values are out of -1/1; correction needed
             if cosAoA>1:
                 cosAoA = 1
-            elif cosAoA<1:
+            elif cosAoA<-1:
                 cosAoA = -1
             
             AoA = np.arccos(cosAoA)
         
         # multiple values
         else:
-            cosAoA = np.diag(vrel.dot(gVec.T))/\
+            # TODO: remove old code
+            #cosAoA = np.diag(vrel.dot(gVec.T))/\
+            #         (np.linalg.norm(vrel, axis=1)*np.linalg.norm(gVec, axis=1))
+                     
+            cosAoA = np.sum(vrel * gVec, axis=1)/\
                      (np.linalg.norm(vrel, axis=1)*np.linalg.norm(gVec, axis=1))
             
             # sometimes, cos values are out of -1/1; correction needed
@@ -2999,7 +3136,8 @@ class MRSmission():
 
         # calc angle using the formula for vector dot multiplication (A.B = cos(theta)*norm(A)*norm(B))
         # ENU[:,:,2] = UP vectors (last entry in highest dimension, i.e. columns at the very right at all times)
-        UPdotV = np.diag(ENU[:,:,2].dot(y[:,3:].T))
+        UPdotV = np.sum(ENU[:,:,2] * y[:,3:],axis=1)
+        #UPdotV = np.diag(ENU[:,:,2].dot(y[:,3:].T))
         costheta = UPdotV / (np.linalg.norm(ENU[:,:,2], axis=1) * np.linalg.norm(y[:,3:], axis=1))
 
         # sometimes, cos values are out of -1/1; correction needed
@@ -3010,8 +3148,9 @@ class MRSmission():
         FPA = np.arcsin(costheta)
 
         # projected vector
-        vProjected = y[:,3:] - np.diag(y[:,3:].dot(ENU[:,:,2].T))[:,None] * ENU[:,:,2]
-
+        #vProjected = y[:,3:] - np.diag(y[:,3:].dot(ENU[:,:,2].T))[:,None] * ENU[:,:,2]
+        vProjected = y[:,3:] -  np.sum(y[:,3:] * ENU[:,:,2], axis=1) [:,None] * ENU[:,:,2]
+        
         # save norm of projected vector, needed afterwards
         vProjectedNorm = np.linalg.norm(vProjected,axis=1)
 
@@ -3021,9 +3160,11 @@ class MRSmission():
         vProjected[ind0vProjected] = ENU[ind0vProjected,:,1]
 
         # calc cos of vProjected w.r.t. NORTH
-        costheta_north = np.diag(ENU[:,:,1].dot(vProjected.T))[:,None] / (np.linalg.norm(ENU[:,:,1],axis=1)*vProjectedNorm)[:,None]
+        #costheta_north = np.diag(ENU[:,:,1].dot(vProjected.T))[:,None] / (np.linalg.norm(ENU[:,:,1],axis=1)*vProjectedNorm)[:,None]
+        costheta_north = np.sum(ENU[:,:,1] * vProjected, axis=1)[:,None] / (np.linalg.norm(ENU[:,:,1],axis=1)*vProjectedNorm)[:,None]
         # calc cos of vProjected w.r.t. EAST
-        costheta_east  = np.diag(ENU[:,:,0].dot(vProjected.T))[:,None] / (np.linalg.norm(ENU[:,:,0],axis=1)*vProjectedNorm)[:,None]
+        #costheta_east  = np.diag(ENU[:,:,0].dot(vProjected.T))[:,None] / (np.linalg.norm(ENU[:,:,0],axis=1)*vProjectedNorm)[:,None]
+        costheta_east  = np.sum(ENU[:,:,0] * vProjected, axis=1)[:,None] / (np.linalg.norm(ENU[:,:,0],axis=1)*vProjectedNorm)[:,None]
 
         # calculate azimuth angle; 0 angle is the north, 90° is east [rad]
         HA = np.arctan2(costheta_east, costheta_north)
@@ -3329,6 +3470,11 @@ class MRSmission():
             if datatype == 'EarthLLA':
                 print('MRS:\t\tAdding Earth LLA to dataframe.')
                 DF[['EarthLat', 'EarthLon', 'EarthAlt']] = self.transform_GCRF_LLAgeodetic(JDs, statevecs[:,:3])
+                
+            elif datatype == 'EarthFixedRadiusAlt':
+                print('MRS:\t\tAdding fixed-radius altitude to dataframe.')
+                posvector = statevecs[:,:3]
+                DF['EarthFixedRadiusAlt'] = np.sum(posvector**2,axis=1)**.5 - EARTH_RADIUS
 
             # adding atmospheric properties
             elif datatype == 'EarthAtmos':
@@ -3362,10 +3508,14 @@ class MRSmission():
                                 self.f107  = indices['f107_adj']
                                 self.Ap    = indices['Apavg']
 
-                    # get and add atmospheric values to dataframe
-                    DF.loc[i,['atmosT', 'atmosPa', 'atmosRho', 'atmosM1']] = \
-                        self.get_atmos(JDs[i], statevecs[i])
-
+                    # add atmosphere if needed 
+                    if DF.atmosModel[i] != '':
+                        # get and add atmospheric values to dataframe
+                        DF.loc[i,['atmosT', 'atmosPa', 'atmosRho', 'atmosM1']] = \
+                            self.get_atmos(JDs[i], statevecs[i])
+                    
+                    else:
+                        DF.loc[i,['atmosT', 'atmosPa', 'atmosRho', 'atmosM1']] = 2.73, 0, 0, 33
 
             # Earth acceleration
             elif datatype == 'EarthAcceleration':
@@ -3421,6 +3571,9 @@ class MRSmission():
 
                 if not 'EarthFixedVEL' in DF.columns:
                     DF = self.expand_DF(['EarthFixedFPAHAvel'], DF)
+                    
+                if not 'atmosRho' in DF.columns:
+                    DF = self.expand_DF(['EarthAtmos'], DF)
 
                 print('MRS:\t\tAdding Earth atmospheric dynamic pressure to dataframe.')
                 DF['dynPress'] = .5 * DF['EarthFixedVEL']**2 * DF['atmosRho']
@@ -3428,12 +3581,13 @@ class MRSmission():
             # mach
             elif datatype == 'Mach':
                 print('MRS:\t\tAdding Mach number to dataframe.')
+               
                 if not 'EarthFixedVEL' in DF.columns:
-                    print('MRS:\t\tERROR: EarthFixedFPAHAvel needs to be added first; skipping dyn. pressure/Mach.')
-                    continue
+                   DF = self.expand_DF(['EarthFixedFPAHAvel'], DF)
+                   
                 if not 'atmosM1' in DF.columns:
-                    print('MRS:\t\tERROR: EarthAtmos needs to be added first; skipping Mach.')
-                    continue
+                   DF = self.expand_DF(['EarthAtmos'], DF)
+                   
                 DF['Mach'] = DF['EarthFixedVEL'].to_numpy() / DF['atmosM1'].to_numpy()
 
             # angle of attack
@@ -3538,6 +3692,16 @@ class MRSmission():
                 DF['EarthOEinclination'] = EarthOrbElements.inclination.degrees
                 DF['EarthOEtrueAnomaly'] = EarthOrbElements.true_anomaly.degrees
                 DF['EarthOEmeanAnomaly'] = EarthOrbElements.mean_anomaly.degrees
+
+            elif datatype == 'EarthApoPeri':
+                
+                if not 'EarthOESMA' in DF.columns:
+                    DF = self.expand_DF(['EarthOrbElements'], DF)
+                
+                print('MRS:\t\tAdding Apogee/Perigee to dataframe.')
+                DF['Apogee']  = DF['EarthOESMA'] * (1+DF['EarthOEeccentricity']) - EARTH_RADIUS
+                DF['Perigee'] = DF['EarthOESMA'] * (1-DF['EarthOEeccentricity']) - EARTH_RADIUS
+               
 
             elif datatype == 'EarthFPAHAvel':
                 print('MRS:\t\tAdding FPA/HA/VEL (w.r.t. to inertial Earth) to dataframe.')
@@ -4101,6 +4265,20 @@ class MRSmission():
                     DF = self.expand_DFname(['EarthLLA'])
 
                 JDevent = self.find_EventTime(0,'max','EarthAlt', eventType)
+                
+            elif eventType == 'MaxQ':
+
+                if not 'dynPress' in self.missionDF.columns:
+                    DF = self.expand_DFname(['dynPress'])
+
+                JDevent = self.find_EventTime(0,'max','dynPress', eventType) 
+            
+            elif eventType == 'Mach1':
+
+                if not 'Mach' in self.missionDF.columns:
+                    DF = self.expand_DFname(['Mach'])
+
+                JDevent = self.find_EventTime(1.,'above','Mach', eventType) 
 
             else:
                 print('MRS:\t\tERROR in get_EventList(): unknown kind of event type requested: ', eventType)
@@ -4122,7 +4300,7 @@ class MRSmission():
         # get spacecraft events
         SCevents = pd.DataFrame(self.SC.get_EventsList(), columns=['MET', 'eventType'])
         # add JD to spacecraft events
-        SCevents['JD_TBD'] = self.MD.t0_JD + (SCevents.MET - self.MD.t0_MET) * SEC2DAYS
+        SCevents['JD_TBD'] = (self.MD.t0_JD + (SCevents.MET - self.MD.t0_MET) * SEC2DAYS).astype('float')
         # add to eventsDF
         self.eventsDF = self.eventsDF.append(SCevents, ignore_index=True)
 
@@ -4187,7 +4365,7 @@ class MRSmission():
             return float('nan')
             
         # get event property value
-        propertyValue = self.eventsDF.loc[eventIndex,[DFcolumn]].values
+        propertyValue = self.eventsDF.iloc[eventIndex[0]][DFcolumn]
         
         return propertyValue
 
@@ -4239,7 +4417,7 @@ class MRSmission():
                 return self.missionDF.loc[DFpointer,'JD_TBD']
 
             # find offset of interpolated peak rel. to max value
-            offset = self.get_QuadraticPeakInterpolation(self.missionDF.loc[DFpointer-1:DFpointer+1,'EarthAlt'].to_numpy())
+            offset = self.get_QuadraticPeakInterpolation(self.missionDF.loc[DFpointer-1:DFpointer+1, DFcolumn].to_numpy())
 
             # get JD-differences to entry before (pre) and after (post)
             deltaJDpre = self.missionDF.loc[DFpointer,'JD_TBD'] - self.missionDF.loc[DFpointer-1,'JD_TBD']

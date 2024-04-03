@@ -21,6 +21,7 @@ Relevant changes to the MyRocketSimulator are summarized in this changelog.
 - Bugs in get_guidance() in MRSguidance
 - MRSspacraft's SpacCraft() get_DragF() now returns single value when vrel is a float
 - corrected invalid cosine values in get_EarthRangeToLaunchsite()
+- Removed some dot multiplications + np.diag in MRSlib that would take lot of space
 
 ### Changed
 

@@ -134,7 +134,7 @@ class SpaceCraft():
             
             # check that amount is at least one
             if SCelement[1]>0:
-                self.SCelementsList.append(SpaceCraftElement(eval('self.SCD.'+SCelement[0]), SCelement[1]))
+                self.SCelementsList.append(SpaceCraftElement(eval('self.SCD.'+SCelement[0]+'()'), SCelement[1]))
                 self.SCelementsNames.append(SCelement[0])
              
     
@@ -1278,3 +1278,5 @@ class SpaceCraftElement():
         
     
         return figThrust, axThrust
+    
+    

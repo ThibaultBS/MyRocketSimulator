@@ -84,7 +84,7 @@ class Guidance():
         """
         
         self.guidancename = gd.name # save guidance name
-        self.gd = gd # save spacraft data
+        self.gd = gd # save guidance data
         self.mode = 'active'
         self.gElevPointer = -1 # pointer to elevation guidance table
         self.gHeadPointer = -1 # pointer to heading guidance table
@@ -265,10 +265,10 @@ class Guidance():
             gVec = y[3:]/np.linalg.norm(y[3:])
             return gVec
         
-        
         # if not using guidance for intermediate interpolator steps but 
         # for true MET values, additional tasks need to be done.
         if mode=='TrueMET':
+            
             self.gElevPointer = ((MET-self.gd.gElevTab[:,I_MET])>=0).nonzero()[0][-1]
             self.gHeadPointer = ((MET-self.gd.gHeadTab[:,I_MET])>=0).nonzero()[0][-1]
         
