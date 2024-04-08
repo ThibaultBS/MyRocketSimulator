@@ -7,8 +7,6 @@ Created on Fri Dec 15 19:58:52 2023
 """
 
 
-
-
 import numpy as np
 from skyfield.api import load, Distance, wgs84
 from skyfield.positionlib import Geocentric
@@ -676,6 +674,8 @@ class Guidance():
             Pitch angle measured from UP of ENU_liftoff [rad].
         gHeadFrame : float
             Heading angle in provided ENU frame [rad].
+        MET : float
+            Mission Elapsed Time.
         ENU : 3x3 array of floats, optional
             A rotation matrix describing a frame in GCRF. The default is 0.
             ENU stands for East/North/Up, but may be any kind of inertial or
@@ -877,7 +877,7 @@ class Guidance():
             Current Julian Date (TBD).
         y : array of floats
             State vector in the reference frame of planet.
-        frame: string
+        frame : string
             Frame (TOD or WGS84) in which ENU is determined. WGS84 considers
             the shape of Earth, TOD assumes circular object. 
             Default is TOD. WGS84 only usueful for initial launch direction.

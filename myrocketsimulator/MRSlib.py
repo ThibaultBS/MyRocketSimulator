@@ -559,11 +559,11 @@ class MRSmission():
 
         # load space weather file if needed
         if 'nrlmsise00' in self.MD.forcesSettings['atmosModel'].to_numpy():
-            # update space weather if using it
+            # load space weather if using it
             if self.use_spaceweather:
                 try:
                     sw.update_data()
-                except ConnectionError:
+                except:
                     print('MRS:\t\tWARNING: no internet connection to update space weather.')
                     return None
                 # load data frame
@@ -1453,6 +1453,10 @@ class MRSmission():
             Mission Elapsed Time
         y : array of floats
             State vector
+        mode : string, default is 'TrueMET'
+            Wether the acceleration is calculated for a fixed MET value 
+            ('TrueMET') or an intermediate value of an interpolation step
+            ('intermediateMET')
 
         Returns
         -------
@@ -3418,7 +3422,7 @@ class MRSmission():
         ----------
         typelist : array of strings
             List of data types to be added to the an existing dataframe
-        DF : str. The default is 'missionDF'.
+        DFname : str. The default is 'missionDF'.
             Dataframe to be expanded.
 
         Returns

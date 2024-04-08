@@ -426,6 +426,21 @@ class MRSviewer():
         return fig, ax
         
     def print_EventDetails(self, eventList, eventProperties):
+        """
+        Prints a table of specific values/properties of specific events.
+
+        Parameters
+        ----------
+        eventList : array of strings
+            Array containing the names of events for which properties are shown.
+        eventProperties : array of strings
+            Array containing the names of eventsDF columns to be shown.
+
+        Returns
+        -------
+        None.
+
+        """
         
         # check that events are available, otherwise remove them from list
         eventIndexList = np.array([], dtype=np.int8)
@@ -1062,6 +1077,8 @@ class MRSviewer():
         ----------
         METrange : array of two floats, optional
             MET start/end range. The default is [0] (no start/end values)
+        folder : string, optional
+            Folder in which to save the exported KML. Default is current folder (./)
 
         Returns
         -------
@@ -1073,7 +1090,7 @@ class MRSviewer():
         DFpointer = self.get_DFpointer(METrange)
         
         # make path to file
-        filename = folder +' '+ self.MD.name +' Earth_Orbit.kml'
+        filename = folder + self.MD.name +' Earth_Orbit.kml'
         
         # get coords
         mycoords = self.missionDF.loc[DFpointer[0]:DFpointer[1],
@@ -1116,6 +1133,8 @@ class MRSviewer():
         ----------
         METrange : array of two floats, optional
             MET start/end range. The default is [0] (no start/end values)
+        folder : string, optional
+            Folder in which to save the exported KML. Default is current folder (./)
 
         Returns
         -------
@@ -1127,7 +1146,7 @@ class MRSviewer():
         DFpointer = self.get_DFpointer(METrange)
         
         # make path to file
-        filename = folder +' '+ self.MD.name +' Moon_Orbit.kml'
+        filename = folder + self.MD.name +' Moon_Orbit.kml'
         
         # get coords
         mycoords = self.missionDF.loc[DFpointer[0]:DFpointer[1],

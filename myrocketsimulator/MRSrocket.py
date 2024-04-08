@@ -220,7 +220,7 @@ class SpaceCraft():
         return SCdragF
 
     
-    def get_AreaCd(self, MET, mach=343.0):
+    def get_AreaCd(self, MET, mach=0.8):
         """
         Returns the cumulated product of drag area and drag cofficients of all
         spacecraft elements. 
@@ -230,7 +230,7 @@ class SpaceCraft():
         MET : float
             Mission Elapsed Time [s].
         mach : float, optional
-            Actual Mach speed. The default is 343.0.
+            Actual Mach speed. The default is 0.8.
 
         Returns
         -------
@@ -1123,7 +1123,7 @@ class SpaceCraftElement():
         MET : float
             Mission Elapsed Time [s].
         mach : float or array of floats
-            Mach alue.
+            Mach value.
         AoA : float, optional
             Angle of attack. Not implemented yet. The default is 0.0.
 
