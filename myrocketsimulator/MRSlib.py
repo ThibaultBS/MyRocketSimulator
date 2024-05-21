@@ -3709,7 +3709,7 @@ class MRSmission():
 
             elif datatype == 'EarthFPAHAvel':
                 print('MRS:\t\tAdding FPA/HA/VEL (w.r.t. to inertial Earth) to dataframe.')
-                FPA, HA = self.get_FPAHA(JDs, statevecs, frame='Earth')
+                FPA, HA = self.get_FPAHA(JDs, statevecs, frame='TOD')
                 DF['EarthFPA'] = FPA * RAD2DEG
                 DF['EarthHA'] = HA * RAD2DEG
                 DF['EarthVEL'] = np.linalg.norm(statevecs[:,3:], axis=1)

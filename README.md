@@ -6,16 +6,21 @@ The simulator relies on a high-fidelity propagator that includes all relevant pe
 
 An early, non-published release of MRS was used to perform a preliminary flight simulation and analysis of the Moon-bound Artemis I mission. Download the paper [Preliminary Launch Trajectory Simulation for Artemis I with the Space Launch System]( https://www.researchgate.net/publication/362270344_Preliminary_Launch_Trajectory_Simulation_for_Artemis_I_with_the_Space_Launch_System).
 
-Relevant features of MRS 1.1:
+MRS 1.2 was used to recreate the actual launch trajectory of Artemis I by optimizing control parameters, aiming to reach a known statevector of the spacecraft some time after trans-lunar injection. Read the paper [Artemis I Launch Trajectory Reconstruction with the MyRocketSimulator Python Package](https://www.researchgate.net/publication/379640560_Artemis_I_Launch_Trajectory_Reconstruction_with_the_MyRocketSimulator_Python_Package).
+
+Relevant features of MRS 1.2:
 -	Multi-segment simulations providing distinct force configurations and delta-v maneuvers. 
 -	Earth and Moon gravity with spherical harmonics using [pyshtools]( https://shtools.github.io/SHTOOLS/).
 -	Solid tides for Earth and Moon.
 -	Third bodies (Sun, Venus, Mars, Jupiter, Moon).
 -	Precise ephemeris and coordinate transformations through [Skyfield]( https://rhodesmill.org/skyfield/).
 -	Atmospheric modelling with [PyNRLMSISE-00](https://github.com/st-bender/pynrlmsise00).
--	DOP853 integration.
+-	DOP853 integration from [SciPy](https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html).
 -	Data frame export, including more than 60 run-time variables.
 -	Import of external state vectors for 1:1 trajectory comparison.
+-	Spacecraft modelling based on different parts with individual stages and engines.
+-	Attitude control in different frames, such as local ENU, launchsite ENU, VNB, relative to inertial and Earth-fixed velocity.
+-	Delta-v maneuvers in different frames.
 -	Pre-configured visualizations. 
 
 The typical workflow of MRS has three steps:
@@ -84,13 +89,14 @@ The github repository contains demo missions that demonstrate different features
 - MRSexample2: high accurate propagation with GMAT orbital element comparison
 - MRSexample3: two delta-v maneuvers to perform a Hohmann transfer
 
-Demo missions will be added for later versions of MRS featuring new relevant functions.
+Demo missions including features from MRS 1.2 such as spacecraft modelling and guidance to simulate actual launch trajectories will be added in future.
 
 ## Documentation
 MRS does currently not provide its own help function or further documentation, but can be easily learned by using the following resources:
 - Demo missions.
 - The publication [Spacecraft Orbit Propagation with the MyRocketSimulator Python Package]( https://www.researchgate.net/publication/375293398_Spacecraft_Orbit_Propagation_with_the_MyRocketSimulator_Python_Package) contains a good summary of MRS 1.0 features. More features have been added since its publication and may be described in later publications.
 - Read the code of the MRS default mission (myrocketsimulator/data/defaultMRSmission.py).
+- Read the code of the [Artemis I launch trajectory simulation](https://github.com/ThibaultBS/MRS-Missions/tree/main/Artemis_I_Launch_Trajectory).
 - Print the docstrings of all methods used in the demo mission, e.g. through:
 ```python
 print(MRSlib.MRSmission.load_mission.__doc__)
