@@ -8,6 +8,11 @@ An early, non-published release of MRS was used to perform a preliminary flight 
 
 MRS 1.2 was used to recreate the actual launch trajectory of Artemis I by optimizing control parameters, aiming to reach a known statevector of the spacecraft some time after trans-lunar injection. Read the paper [Artemis I Launch Trajectory Reconstruction with the MyRocketSimulator Python Package](https://www.researchgate.net/publication/379640560_Artemis_I_Launch_Trajectory_Reconstruction_with_the_MyRocketSimulator_Python_Package).
 
+Exemplary visualizations of Artemis' I flight: acceleration, rocket mass, and trajectory representation with Google Earth.
+
+![Artemis I acceleration and rocket mass during launch](https://raw.githubusercontent.com/ThibaultBS/MyRocketSimulator/main/MRS_examples/MRSoutputOther/ArtemisI_LaunchStats.png)
+![Artemis I trajectory in Google Earth](https://raw.githubusercontent.com/ThibaultBS/MyRocketSimulator/main/MRS_examples/MRSoutputOther/ArtemisI_Launch_GoogleEarth.jpg)
+
 Relevant features of MRS 1.2:
 -	Multi-segment simulations providing distinct force configurations and delta-v maneuvers. 
 -	Earth and Moon gravity with spherical harmonics using [pyshtools]( https://shtools.github.io/SHTOOLS/).
